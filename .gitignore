@@ -1,0 +1,28 @@
+# Build outputs
+/bin/
+/obj/
+
+# Visual Studio
+/.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+
+# Logs / temp
+*.log
+*.tmp
+*.cache
+*.temp
+
+# DotNet tooling
+/.idea/
+/.ionide/
+
+# OS artifacts
+Thumbs.db
+Desktop.ini
+.DS_Store
