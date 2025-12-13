@@ -138,6 +138,8 @@
             picFullSize.Location = new Point(0, 0);
             picFullSize.Name = "picFullSize";
             picFullSize.Size = new Size(227, 269);
+            picFullSize.SizeMode = PictureBoxSizeMode.Zoom;
+            picFullSize.BorderStyle = BorderStyle.FixedSingle;
             picFullSize.TabIndex = 0;
             picFullSize.TabStop = false;
             // 

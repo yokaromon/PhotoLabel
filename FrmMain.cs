@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PhotoLabel.Ocr;
 
 namespace PhotoLabel
 {
@@ -12,6 +13,8 @@ namespace PhotoLabel
         private const string ConfigFileName = "Config.ini";
         private const string TargetDirKey = "TargetDir";
         private string _currentPreviewPath = string.Empty;
+        private ThumbnailCard? _selectedCard;
+        private OcrService? _ocrService;
 
         public FrmMain()
         {
@@ -48,6 +51,8 @@ namespace PhotoLabel
 
                 PopulateTree(targetDir);
                 LoadImagesForDirectory(targetDir);
+
+                InitializeOcrServices(configPath);
             }
             catch (Exception ex)
             {
@@ -192,9 +197,21 @@ namespace PhotoLabel
 
         private void WireCardEvents(ThumbnailCard card, string filePath)
         {
-            card.Click += (_, _) => ShowPreview(filePath);
-            card.SelectionCheckBox.Click += (_, _) => ShowPreview(filePath);
+            card.Click += (_, _) => SelectAndPreview(card, filePath);
+            card.SelectionCheckBox.Click += (_, _) => SelectAndPreview(card, filePath);
             card.SelectionCheckBox.CheckedChanged += (_, _) => { _ = RunOcrAsync(filePath); };
+        }
+
+        private void SelectAndPreview(ThumbnailCard card, string filePath)
+        {
+            if (_selectedCard != null && _selectedCard != card)
+            {
+                _selectedCard.SetSelected(false);
+            }
+
+            _selectedCard = card;
+            _selectedCard.SetSelected(true);
+            ShowPreview(filePath);
         }
 
         private void ShowPreview(string filePath)
@@ -220,15 +237,75 @@ namespace PhotoLabel
         {
             try
             {
-                txtOcr.Text = "Running OCR...";
-                await Task.Delay(200); // placeholder for async OCR
+                if (_ocrService == null)
+                {
+                    txtOcr.Text = "OCR service not configured.";
+                    return;
+                }
 
-                // TODO: integrate actual OCR service (Vision/proxy) and replace rules
-                txtOcr.Text = $"[OCR stub]\r\n{Path.GetFileName(filePath)}";
+                txtOcr.Text = "Running OCR...";
+                var result = await _ocrService.ExtractTextAsync(filePath);
+
+                if (result.ExtractedTexts.Count == 0)
+                {
+                    txtOcr.Text = "No text detected.";
+                    return;
+                }
+
+                var cacheNote = result.FromCache ? " (cache)" : string.Empty;
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"Detected {result.ExtractedTexts.Count} items{cacheNote}");
+                foreach (var item in result.ExtractedTexts)
+                {
+                    sb.AppendLine(item.Text);
+                }
+                txtOcr.Text = sb.ToString();
             }
             catch (Exception ex)
             {
                 txtOcr.Text = $"OCR failed: {ex.Message}";
+            }
+        }
+
+        private void InitializeOcrServices(string configPath)
+        {
+            try
+            {
+                var ini = File.ReadAllLines(configPath);
+                string? visionUrl = null;
+                string? apiKey = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_API_KEY");
+                string? replacePath = null;
+
+                foreach (var line in ini)
+                {
+                    var trimmed = line.Trim();
+                    if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#") || trimmed.StartsWith(";")) continue;
+                    var parts = trimmed.Split('=', 2);
+                    if (parts.Length != 2) continue;
+                    var key = parts[0].Trim();
+                    var value = parts[1].Trim();
+                    if (key.Equals("VisionApiUrl", StringComparison.OrdinalIgnoreCase))
+                    {
+                        visionUrl = value;
+                    }
+                    if (key.Equals("ReplaceRulesPath", StringComparison.OrdinalIgnoreCase))
+                    {
+                        replacePath = value;
+                    }
+                }
+
+                visionUrl ??= "https://vision.googleapis.com/v1/images:annotate";
+                replacePath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ReplaceRules.dat");
+
+                var rules = new ReplaceRuleStore(replacePath).Load();
+                var replace = new ReplaceService(rules);
+                var cache = new OcrCacheService("PhotoLabel");
+                var client = new GoogleVisionClient(visionUrl, apiKey);
+                _ocrService = new OcrService(client, cache, replace);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to initialize OCR service.{Environment.NewLine}{ex.Message}", "OCR Init Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
     }

@@ -1,0 +1,3 @@
+{"pattern": "O0", "replacement": "00", "isRegex": false}
+{"pattern": "\\\\s+", "replacement": " ", "isRegex": true}
+{"pattern": "[^0-9A-Za-z\\-_. ]", "replacement": "", "isRegex": true}
