@@ -34,12 +34,14 @@ namespace PhotoLabel
             splitContainer2 = new SplitContainer();
             flowThumbs = new FlowLayoutPanel();
             pnlAction = new Panel();
+            comboBox2 = new ComboBox();
             splitContainer3 = new SplitContainer();
             webViewPreview = new WebView2();
             txtOcr = new TextBox();
             pnlControl = new Panel();
-            comboBox1 = new ComboBox();
-            comboBox2 = new ComboBox();
+            comboBox3 = new ComboBox();
+            comboBox4 = new ComboBox();
+            textBox1 = new TextBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -114,13 +116,23 @@ namespace PhotoLabel
             // 
             // pnlAction
             // 
+            pnlAction.Controls.Add(textBox1);
+            pnlAction.Controls.Add(comboBox4);
+            pnlAction.Controls.Add(comboBox3);
             pnlAction.Controls.Add(comboBox2);
-            pnlAction.Controls.Add(comboBox1);
             pnlAction.Dock = DockStyle.Top;
             pnlAction.Location = new Point(0, 0);
             pnlAction.Name = "pnlAction";
             pnlAction.Size = new Size(946, 127);
             pnlAction.TabIndex = 0;
+            // 
+            // comboBox2
+            // 
+            comboBox2.FormattingEnabled = true;
+            comboBox2.Location = new Point(433, 21);
+            comboBox2.Name = "comboBox2";
+            comboBox2.Size = new Size(332, 40);
+            comboBox2.TabIndex = 1;
             // 
             // splitContainer3
             // 
@@ -169,21 +181,28 @@ namespace PhotoLabel
             pnlControl.Size = new Size(1765, 198);
             pnlControl.TabIndex = 1;
             // 
-            // comboBox1
+            // comboBox3
             // 
-            comboBox1.FormattingEnabled = true;
-            comboBox1.Location = new Point(3, 45);
-            comboBox1.Name = "comboBox1";
-            comboBox1.Size = new Size(324, 40);
-            comboBox1.TabIndex = 0;
+            comboBox3.FormattingEnabled = true;
+            comboBox3.Location = new Point(69, 78);
+            comboBox3.Name = "comboBox3";
+            comboBox3.Size = new Size(324, 40);
+            comboBox3.TabIndex = 2;
             // 
-            // comboBox2
+            // comboBox4
             // 
-            comboBox2.FormattingEnabled = true;
-            comboBox2.Location = new Point(372, 45);
-            comboBox2.Name = "comboBox2";
-            comboBox2.Size = new Size(332, 40);
-            comboBox2.TabIndex = 1;
+            comboBox4.FormattingEnabled = true;
+            comboBox4.Location = new Point(433, 78);
+            comboBox4.Name = "comboBox4";
+            comboBox4.Size = new Size(324, 40);
+            comboBox4.TabIndex = 3;
+            // 
+            // textBox1
+            // 
+            textBox1.Location = new Point(66, 19);
+            textBox1.Name = "textBox1";
+            textBox1.Size = new Size(327, 39);
+            textBox1.TabIndex = 4;
             // 
             // FrmMain
             // 
@@ -203,6 +222,7 @@ namespace PhotoLabel
             ((System.ComponentModel.ISupportInitialize)splitContainer2).EndInit();
             splitContainer2.ResumeLayout(false);
             pnlAction.ResumeLayout(false);
+            pnlAction.PerformLayout();
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
             splitContainer3.Panel2.PerformLayout();
@@ -224,6 +244,8 @@ namespace PhotoLabel
         private TextBox txtOcr;
         private Panel pnlAction;
         private ComboBox comboBox2;
-        private ComboBox comboBox1;
+        private TextBox textBox1;
+        private ComboBox comboBox4;
+        private ComboBox comboBox3;
     }
 }

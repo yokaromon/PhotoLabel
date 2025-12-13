@@ -269,29 +269,8 @@ namespace PhotoLabel
             try
             {
                 await EnsureWebViewAsync();
-                var uri = new Uri(filePath).AbsoluteUri;
-                var html = $"""
-<!doctype html>
-<html>
-<head>
-<style>
-html,body {{ margin:0; padding:0; height:100%; background:#111; overflow:hidden; }}
-img {{
-    max-width: 100%;
-    max-height: 100%;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-}}
-</style>
-</head>
-<body>
-<img src="{uri}" />
-</body>
-</html>
-""";
-                webViewPreview.NavigateToString(html);
+                var uri = new Uri(filePath);
+                webViewPreview.Source = uri; // navigate directly to file:// image
             }
             catch (Exception ex)
             {
