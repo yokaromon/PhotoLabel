@@ -1,4 +1,5 @@
-﻿namespace PhotoLabel
+﻿using Microsoft.Web.WebView2.WinForms;
+namespace PhotoLabel
 {
     partial class FrmMain
     {
@@ -32,11 +33,13 @@
             treDir = new TreeView();
             splitContainer2 = new SplitContainer();
             flowThumbs = new FlowLayoutPanel();
+            pnlAction = new Panel();
             splitContainer3 = new SplitContainer();
-            picFullSize = new PictureBox();
+            webViewPreview = new WebView2();
             txtOcr = new TextBox();
             pnlControl = new Panel();
-            pnlAction = new Panel();
+            comboBox1 = new ComboBox();
+            comboBox2 = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -45,11 +48,12 @@
             splitContainer2.Panel1.SuspendLayout();
             splitContainer2.Panel2.SuspendLayout();
             splitContainer2.SuspendLayout();
+            pnlAction.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
             splitContainer3.Panel1.SuspendLayout();
             splitContainer3.Panel2.SuspendLayout();
             splitContainer3.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)picFullSize).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)webViewPreview).BeginInit();
             SuspendLayout();
             // 
             // splitContainer1
@@ -65,8 +69,8 @@
             // splitContainer1.Panel2
             // 
             splitContainer1.Panel2.Controls.Add(splitContainer2);
-            splitContainer1.Size = new Size(1151, 555);
-            splitContainer1.SplitterDistance = 300;
+            splitContainer1.Size = new Size(1765, 745);
+            splitContainer1.SplitterDistance = 460;
             splitContainer1.TabIndex = 0;
             // 
             // treDir
@@ -74,7 +78,7 @@
             treDir.Dock = DockStyle.Fill;
             treDir.Location = new Point(0, 0);
             treDir.Name = "treDir";
-            treDir.Size = new Size(300, 555);
+            treDir.Size = new Size(460, 745);
             treDir.TabIndex = 0;
             // 
             // splitContainer2
@@ -91,8 +95,8 @@
             // splitContainer2.Panel2
             // 
             splitContainer2.Panel2.Controls.Add(splitContainer3);
-            splitContainer2.Size = new Size(847, 555);
-            splitContainer2.SplitterDistance = 616;
+            splitContainer2.Size = new Size(1301, 745);
+            splitContainer2.SplitterDistance = 946;
             splitContainer2.TabIndex = 0;
             // 
             // flowThumbs
@@ -104,9 +108,19 @@
             flowThumbs.Margin = new Padding(6);
             flowThumbs.Name = "flowThumbs";
             flowThumbs.Padding = new Padding(12);
-            flowThumbs.Size = new Size(616, 428);
+            flowThumbs.Size = new Size(946, 618);
             flowThumbs.TabIndex = 0;
             flowThumbs.WrapContents = false;
+            // 
+            // pnlAction
+            // 
+            pnlAction.Controls.Add(comboBox2);
+            pnlAction.Controls.Add(comboBox1);
+            pnlAction.Dock = DockStyle.Top;
+            pnlAction.Location = new Point(0, 0);
+            pnlAction.Name = "pnlAction";
+            pnlAction.Size = new Size(946, 127);
+            pnlAction.TabIndex = 0;
             // 
             // splitContainer3
             // 
@@ -117,25 +131,26 @@
             // 
             // splitContainer3.Panel1
             // 
-            splitContainer3.Panel1.Controls.Add(picFullSize);
+            splitContainer3.Panel1.Controls.Add(webViewPreview);
             // 
             // splitContainer3.Panel2
             // 
             splitContainer3.Panel2.Controls.Add(txtOcr);
-            splitContainer3.Size = new Size(227, 555);
-            splitContainer3.SplitterDistance = 269;
+            splitContainer3.Size = new Size(351, 745);
+            splitContainer3.SplitterDistance = 361;
             splitContainer3.TabIndex = 0;
             // 
-            // picFullSize
+            // webViewPreview
             // 
-            picFullSize.BorderStyle = BorderStyle.FixedSingle;
-            picFullSize.Dock = DockStyle.Fill;
-            picFullSize.Location = new Point(0, 0);
-            picFullSize.Name = "picFullSize";
-            picFullSize.Size = new Size(227, 269);
-            picFullSize.SizeMode = PictureBoxSizeMode.Zoom;
-            picFullSize.TabIndex = 0;
-            picFullSize.TabStop = false;
+            webViewPreview.AllowExternalDrop = true;
+            webViewPreview.CreationProperties = null;
+            webViewPreview.DefaultBackgroundColor = Color.Black;
+            webViewPreview.Dock = DockStyle.Fill;
+            webViewPreview.Location = new Point(0, 0);
+            webViewPreview.Name = "webViewPreview";
+            webViewPreview.Size = new Size(351, 361);
+            webViewPreview.TabIndex = 0;
+            webViewPreview.ZoomFactor = 1D;
             // 
             // txtOcr
             // 
@@ -143,7 +158,7 @@
             txtOcr.Location = new Point(0, 0);
             txtOcr.Multiline = true;
             txtOcr.Name = "txtOcr";
-            txtOcr.Size = new Size(227, 282);
+            txtOcr.Size = new Size(351, 380);
             txtOcr.TabIndex = 0;
             // 
             // pnlControl
@@ -151,22 +166,30 @@
             pnlControl.Dock = DockStyle.Top;
             pnlControl.Location = new Point(0, 0);
             pnlControl.Name = "pnlControl";
-            pnlControl.Size = new Size(1151, 198);
+            pnlControl.Size = new Size(1765, 198);
             pnlControl.TabIndex = 1;
             // 
-            // pnlAction
+            // comboBox1
             // 
-            pnlAction.Dock = DockStyle.Top;
-            pnlAction.Location = new Point(0, 0);
-            pnlAction.Name = "pnlAction";
-            pnlAction.Size = new Size(616, 127);
-            pnlAction.TabIndex = 0;
+            comboBox1.FormattingEnabled = true;
+            comboBox1.Location = new Point(3, 45);
+            comboBox1.Name = "comboBox1";
+            comboBox1.Size = new Size(324, 40);
+            comboBox1.TabIndex = 0;
+            // 
+            // comboBox2
+            // 
+            comboBox2.FormattingEnabled = true;
+            comboBox2.Location = new Point(372, 45);
+            comboBox2.Name = "comboBox2";
+            comboBox2.Size = new Size(332, 40);
+            comboBox2.TabIndex = 1;
             // 
             // FrmMain
             // 
             AutoScaleDimensions = new SizeF(13F, 32F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1151, 753);
+            ClientSize = new Size(1765, 943);
             Controls.Add(splitContainer1);
             Controls.Add(pnlControl);
             Name = "FrmMain";
@@ -179,12 +202,13 @@
             splitContainer2.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer2).EndInit();
             splitContainer2.ResumeLayout(false);
+            pnlAction.ResumeLayout(false);
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
             splitContainer3.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)picFullSize).EndInit();
+            ((System.ComponentModel.ISupportInitialize)webViewPreview).EndInit();
             ResumeLayout(false);
         }
 
@@ -196,8 +220,10 @@
         private FlowLayoutPanel flowThumbs;
         private SplitContainer splitContainer3;
         private Panel pnlControl;
-        private PictureBox picFullSize;
+        private WebView2 webViewPreview;
         private TextBox txtOcr;
         private Panel pnlAction;
+        private ComboBox comboBox2;
+        private ComboBox comboBox1;
     }
 }

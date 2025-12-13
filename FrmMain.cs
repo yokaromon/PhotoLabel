@@ -1,9 +1,9 @@
 using System;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.WinForms;
 using PhotoLabel.Ocr;
 
 namespace PhotoLabel
@@ -15,6 +15,8 @@ namespace PhotoLabel
         private string _currentPreviewPath = string.Empty;
         private ThumbnailCard? _selectedCard;
         private OcrService? _ocrService;
+        private const int WIDTH = 800;
+        private Task? _webViewInitTask;
 
         public FrmMain()
         {
@@ -22,6 +24,10 @@ namespace PhotoLabel
             Load += FrmMain_Load;
             treDir.BeforeExpand += TreDir_BeforeExpand;
             treDir.AfterSelect += TreDir_AfterSelect;
+            splitContainer2.SizeChanged += (_, _) => AdjustPaneWidthToCard();
+            Resize += (_, _) => AdjustPaneWidthToCard();
+            flowThumbs.ControlAdded += (_, _) => AdjustPaneWidthToCard();
+            flowThumbs.ControlRemoved += (_, _) => AdjustPaneWidthToCard();
         }
 
         private void FrmMain_Load(object? sender, EventArgs e)
@@ -184,6 +190,7 @@ namespace PhotoLabel
                     WireCardEvents(card, filePath);
                     flowThumbs.Controls.Add(card);
                 }
+                AdjustPaneWidthToCard();
             }
             catch (Exception ex)
             {
@@ -211,19 +218,80 @@ namespace PhotoLabel
 
             _selectedCard = card;
             _selectedCard.SetSelected(true);
-            ShowPreview(filePath);
+            _ = ShowPreviewAsync(filePath);
         }
 
-        private void ShowPreview(string filePath)
+        private int GetCardWidth()
+        {
+            var card = flowThumbs.Controls.OfType<ThumbnailCard>().FirstOrDefault();
+            return card?.Width ?? WIDTH;
+        }
+
+        private void AdjustPaneWidthToCard()
+        {
+            try
+            {
+                var cardWidth = GetCardWidth();
+                var padding = flowThumbs.Padding.Horizontal;
+                var scrollbar = SystemInformation.VerticalScrollBarWidth;
+                var margin = 24;
+                var desired = cardWidth + padding + scrollbar + margin;
+                var minRight = 200;
+                var total = splitContainer2.Width;
+                var splitter = Math.Min(desired, Math.Max(100, total - minRight));
+                splitContainer2.SplitterDistance = splitter;
+
+                foreach (var card in flowThumbs.Controls.OfType<ThumbnailCard>())
+                {
+                    card.Width = cardWidth;
+                }
+            }
+            catch
+            {
+                // ignore layout errors
+            }
+        }
+
+        private async Task EnsureWebViewAsync()
+        {
+            if (webViewPreview.CoreWebView2 != null)
+            {
+                return;
+            }
+
+            _webViewInitTask ??= webViewPreview.EnsureCoreWebView2Async();
+            await _webViewInitTask;
+        }
+
+        private async Task ShowPreviewAsync(string filePath)
         {
             _currentPreviewPath = filePath;
             try
             {
-                // Avoid locking source file by copying to memory
-                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var img = Image.FromStream(fs, useEmbeddedColorManagement: false, validateImageData: false);
-                picFullSize.Image?.Dispose();
-                picFullSize.Image = new Bitmap(img);
+                await EnsureWebViewAsync();
+                var uri = new Uri(filePath).AbsoluteUri;
+                var html = $"""
+<!doctype html>
+<html>
+<head>
+<style>
+html,body {{ margin:0; padding:0; height:100%; background:#111; overflow:hidden; }}
+img {{
+    max-width: 100%;
+    max-height: 100%;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}}
+</style>
+</head>
+<body>
+<img src="{uri}" />
+</body>
+</html>
+""";
+                webViewPreview.NavigateToString(html);
             }
             catch (Exception ex)
             {
