@@ -33,9 +33,10 @@
             splitContainer2 = new SplitContainer();
             flowThumbs = new FlowLayoutPanel();
             splitContainer3 = new SplitContainer();
-            pnlControl = new Panel();
             picFullSize = new PictureBox();
             txtOcr = new TextBox();
+            pnlControl = new Panel();
+            pnlAction = new Panel();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -85,6 +86,7 @@
             // splitContainer2.Panel1
             // 
             splitContainer2.Panel1.Controls.Add(flowThumbs);
+            splitContainer2.Panel1.Controls.Add(pnlAction);
             // 
             // splitContainer2.Panel2
             // 
@@ -98,11 +100,11 @@
             flowThumbs.AutoScroll = true;
             flowThumbs.Dock = DockStyle.Fill;
             flowThumbs.FlowDirection = FlowDirection.TopDown;
-            flowThumbs.Location = new Point(0, 0);
+            flowThumbs.Location = new Point(0, 127);
             flowThumbs.Margin = new Padding(6);
             flowThumbs.Name = "flowThumbs";
             flowThumbs.Padding = new Padding(12);
-            flowThumbs.Size = new Size(616, 555);
+            flowThumbs.Size = new Size(616, 428);
             flowThumbs.TabIndex = 0;
             flowThumbs.WrapContents = false;
             // 
@@ -124,22 +126,14 @@
             splitContainer3.SplitterDistance = 269;
             splitContainer3.TabIndex = 0;
             // 
-            // pnlControl
-            // 
-            pnlControl.Dock = DockStyle.Top;
-            pnlControl.Location = new Point(0, 0);
-            pnlControl.Name = "pnlControl";
-            pnlControl.Size = new Size(1151, 198);
-            pnlControl.TabIndex = 1;
-            // 
             // picFullSize
             // 
+            picFullSize.BorderStyle = BorderStyle.FixedSingle;
             picFullSize.Dock = DockStyle.Fill;
             picFullSize.Location = new Point(0, 0);
             picFullSize.Name = "picFullSize";
             picFullSize.Size = new Size(227, 269);
             picFullSize.SizeMode = PictureBoxSizeMode.Zoom;
-            picFullSize.BorderStyle = BorderStyle.FixedSingle;
             picFullSize.TabIndex = 0;
             picFullSize.TabStop = false;
             // 
@@ -151,6 +145,22 @@
             txtOcr.Name = "txtOcr";
             txtOcr.Size = new Size(227, 282);
             txtOcr.TabIndex = 0;
+            // 
+            // pnlControl
+            // 
+            pnlControl.Dock = DockStyle.Top;
+            pnlControl.Location = new Point(0, 0);
+            pnlControl.Name = "pnlControl";
+            pnlControl.Size = new Size(1151, 198);
+            pnlControl.TabIndex = 1;
+            // 
+            // pnlAction
+            // 
+            pnlAction.Dock = DockStyle.Top;
+            pnlAction.Location = new Point(0, 0);
+            pnlAction.Name = "pnlAction";
+            pnlAction.Size = new Size(616, 127);
+            pnlAction.TabIndex = 0;
             // 
             // FrmMain
             // 
@@ -188,5 +198,6 @@
         private Panel pnlControl;
         private PictureBox picFullSize;
         private TextBox txtOcr;
+        private Panel pnlAction;
     }
 }

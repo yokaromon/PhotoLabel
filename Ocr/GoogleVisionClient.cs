@@ -17,15 +17,22 @@ namespace PhotoLabel.Ocr
 
         public GoogleVisionClient(string visionApiUrl, string? apiKey = null)
         {
-            _visionApiUrl = !string.IsNullOrWhiteSpace(visionApiUrl)
-                ? visionApiUrl
-                : throw new ArgumentNullException(nameof(visionApiUrl));
+            if (string.IsNullOrWhiteSpace(visionApiUrl))
+            {
+                throw new ArgumentNullException(nameof(visionApiUrl));
+            }
 
+            _visionApiUrl = visionApiUrl;
             _httpClient = new HttpClient();
 
-            if (!string.IsNullOrWhiteSpace(apiKey) && visionApiUrl.Contains("googleapis.com", StringComparison.OrdinalIgnoreCase))
+            // Append API key only when it is not already present in the URL.
+            var hasKeyParam = _visionApiUrl.IndexOf("key=", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!hasKeyParam && !string.IsNullOrWhiteSpace(apiKey) &&
+                _visionApiUrl.Contains("googleapis.com", StringComparison.OrdinalIgnoreCase))
             {
-                _visionApiUrl = $"{_visionApiUrl}?key={apiKey}";
+                _visionApiUrl = _visionApiUrl.Contains("?")
+                    ? $"{_visionApiUrl}&key={apiKey}"
+                    : $"{_visionApiUrl}?key={apiKey}";
             }
         }
 
