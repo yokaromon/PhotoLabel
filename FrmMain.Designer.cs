@@ -34,6 +34,8 @@
             flowThumbs = new FlowLayoutPanel();
             splitContainer3 = new SplitContainer();
             pnlControl = new Panel();
+            picFullSize = new PictureBox();
+            txtOcr = new TextBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -43,13 +45,16 @@
             splitContainer2.Panel2.SuspendLayout();
             splitContainer2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
+            splitContainer3.Panel1.SuspendLayout();
+            splitContainer3.Panel2.SuspendLayout();
             splitContainer3.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)picFullSize).BeginInit();
             SuspendLayout();
             // 
             // splitContainer1
             // 
             splitContainer1.Dock = DockStyle.Fill;
-            splitContainer1.Location = new Point(0, 0);
+            splitContainer1.Location = new Point(0, 198);
             splitContainer1.Name = "splitContainer1";
             // 
             // splitContainer1.Panel1
@@ -59,7 +64,7 @@
             // splitContainer1.Panel2
             // 
             splitContainer1.Panel2.Controls.Add(splitContainer2);
-            splitContainer1.Size = new Size(1151, 549);
+            splitContainer1.Size = new Size(1151, 555);
             splitContainer1.SplitterDistance = 300;
             splitContainer1.TabIndex = 0;
             // 
@@ -68,7 +73,7 @@
             treDir.Dock = DockStyle.Fill;
             treDir.Location = new Point(0, 0);
             treDir.Name = "treDir";
-            treDir.Size = new Size(300, 549);
+            treDir.Size = new Size(300, 555);
             treDir.TabIndex = 0;
             // 
             // splitContainer2
@@ -84,7 +89,7 @@
             // splitContainer2.Panel2
             // 
             splitContainer2.Panel2.Controls.Add(splitContainer3);
-            splitContainer2.Size = new Size(847, 549);
+            splitContainer2.Size = new Size(847, 555);
             splitContainer2.SplitterDistance = 616;
             splitContainer2.TabIndex = 0;
             // 
@@ -97,7 +102,7 @@
             flowThumbs.Margin = new Padding(6);
             flowThumbs.Name = "flowThumbs";
             flowThumbs.Padding = new Padding(12);
-            flowThumbs.Size = new Size(616, 549);
+            flowThumbs.Size = new Size(616, 555);
             flowThumbs.TabIndex = 0;
             flowThumbs.WrapContents = false;
             // 
@@ -107,8 +112,16 @@
             splitContainer3.Location = new Point(0, 0);
             splitContainer3.Name = "splitContainer3";
             splitContainer3.Orientation = Orientation.Horizontal;
-            splitContainer3.Size = new Size(227, 549);
-            splitContainer3.SplitterDistance = 267;
+            // 
+            // splitContainer3.Panel1
+            // 
+            splitContainer3.Panel1.Controls.Add(picFullSize);
+            // 
+            // splitContainer3.Panel2
+            // 
+            splitContainer3.Panel2.Controls.Add(txtOcr);
+            splitContainer3.Size = new Size(227, 555);
+            splitContainer3.SplitterDistance = 269;
             splitContainer3.TabIndex = 0;
             // 
             // pnlControl
@@ -118,6 +131,24 @@
             pnlControl.Name = "pnlControl";
             pnlControl.Size = new Size(1151, 198);
             pnlControl.TabIndex = 1;
+            // 
+            // picFullSize
+            // 
+            picFullSize.Dock = DockStyle.Fill;
+            picFullSize.Location = new Point(0, 0);
+            picFullSize.Name = "picFullSize";
+            picFullSize.Size = new Size(227, 269);
+            picFullSize.TabIndex = 0;
+            picFullSize.TabStop = false;
+            // 
+            // txtOcr
+            // 
+            txtOcr.Dock = DockStyle.Fill;
+            txtOcr.Location = new Point(0, 0);
+            txtOcr.Multiline = true;
+            txtOcr.Name = "txtOcr";
+            txtOcr.Size = new Size(227, 282);
+            txtOcr.TabIndex = 0;
             // 
             // FrmMain
             // 
@@ -136,8 +167,12 @@
             splitContainer2.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer2).EndInit();
             splitContainer2.ResumeLayout(false);
+            splitContainer3.Panel1.ResumeLayout(false);
+            splitContainer3.Panel2.ResumeLayout(false);
+            splitContainer3.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)picFullSize).EndInit();
             ResumeLayout(false);
         }
 
@@ -149,5 +184,7 @@
         private FlowLayoutPanel flowThumbs;
         private SplitContainer splitContainer3;
         private Panel pnlControl;
+        private PictureBox picFullSize;
+        private TextBox txtOcr;
     }
 }

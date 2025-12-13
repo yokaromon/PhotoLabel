@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.IO;
 using System.Security.Cryptography;
@@ -7,99 +7,44 @@ using System.Windows.Forms;
 namespace PhotoLabel
 {
     /// <summary>
-    /// Thumbnail card for the image list (thumb, name, modified date, size, checkbox).
+    /// Thumbnail card for the image list (uses designer controls).
     /// </summary>
     public class ThumbnailCard : UserControl
     {
-        private readonly PictureBox _pic;
-        private readonly Label _lblName;
-        private readonly Label _lblDate;
-        private readonly Label _lblSize;
-        private readonly CheckBox _chk;
+        private PictureBox picBox;
+        private CheckBox chkSelect;
+        private Label lblDate;
+        private Label lblSize;
+        private Label lblName;
 
-        public string FilePath { get; }
-        public CheckBox SelectionCheckBox => _chk;
+        public string FilePath { get; private set; } = string.Empty;
+        public CheckBox SelectionCheckBox => chkSelect;
 
         public ThumbnailCard(string filePath)
         {
             FilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+
+            InitializeComponent();
+
+            // runtime tweaks
             DoubleBuffered = true;
             Margin = new Padding(10);
-            Size = new Size(520, 150);
-            BackColor = SystemColors.Window;
             BorderStyle = BorderStyle.FixedSingle;
+            BackColor = SystemColors.Window;
 
-            _chk = new CheckBox
-            {
-                Dock = DockStyle.Fill,
-                Width = 20,
-                Height = 20,
-                Tag = filePath,
-                Margin = new Padding(8, 8, 4, 4)
-            };
-
-            _pic = new PictureBox
-            {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.Zoom,
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = SystemColors.ControlLight
-            };
-
-            _lblName = CreateLabel(FontStyle.Bold);
-            _lblDate = CreateLabel(FontStyle.Regular);
-            _lblSize = CreateLabel(FontStyle.Regular);
-
-            var rightLayout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 3,
-                Padding = new Padding(4, 6, 8, 6)
-            };
-            rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
-            rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            rightLayout.Controls.Add(_lblName, 0, 0);
-            rightLayout.Controls.Add(_lblDate, 0, 1);
-            rightLayout.Controls.Add(_lblSize, 0, 2);
-
-            var mainLayout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 3,
-                RowCount = 1,
-                Padding = new Padding(6),
-            };
-            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));   // checkbox
-            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));  // thumb
-            mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));   // text
-
-            mainLayout.Controls.Add(_chk, 0, 0);
-            mainLayout.Controls.Add(_pic, 1, 0);
-            mainLayout.Controls.Add(rightLayout, 2, 0);
-
-            Controls.Add(mainLayout);
+            picBox.SizeMode = PictureBoxSizeMode.Zoom;
+            picBox.BorderStyle = BorderStyle.FixedSingle;
+            picBox.BackColor = SystemColors.ControlLight;
 
             LoadMetadata(filePath);
         }
 
-        private Label CreateLabel(FontStyle style)
-        {
-            return new Label
-            {
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                AutoEllipsis = true,
-                Font = new Font(Font, style)
-            };
-        }
-
         private void LoadMetadata(string filePath)
         {
-            _lblName.Text = Path.GetFileName(filePath);
-            _lblDate.Text = $"Modified: {File.GetLastWriteTime(filePath):yyyy/MM/dd HH:mm:ss}";
-            _lblSize.Text = GetImageSizeText(filePath);
+            lblName.Text = Path.GetFileName(filePath);
+            var modified = File.GetLastWriteTime(filePath);
+            lblDate.Text = $"Modified: {modified:yyyy/MM/dd HH:mm:ss}";
+            lblSize.Text = GetImageSizeText(filePath);
 
             try
             {
@@ -107,12 +52,12 @@ namespace PhotoLabel
                 if (File.Exists(thumbPath))
                 {
                     using var fs = new FileStream(thumbPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    _pic.Image = Image.FromStream(fs);
+                    picBox.Image = Image.FromStream(fs);
                 }
             }
             catch
             {
-                // Ignore thumbnail errors; leave blank.
+                // ignore thumbnail errors
             }
         }
 
@@ -130,7 +75,7 @@ namespace PhotoLabel
             }
         }
 
-        private static string GetOrCreateThumbnail(string filePath, int width = 120, int height = 120)
+        private static string GetOrCreateThumbnail(string filePath, int width = 200, int height = 150)
         {
             var cacheDir = Path.Combine(Path.GetTempPath(), "PhotoLabel", "Thumbnails");
             Directory.CreateDirectory(cacheDir);
@@ -173,6 +118,88 @@ namespace PhotoLabel
             var bytes = System.Text.Encoding.UTF8.GetBytes(input);
             var hash = sha.ComputeHash(bytes);
             return Convert.ToHexString(hash)[..16];
+        }
+
+        /// <summary>
+        /// Designer-generated controls (kept in-code for simplicity).
+        /// </summary>
+        private void InitializeComponent()
+        {
+            picBox = new PictureBox();
+            chkSelect = new CheckBox();
+            lblDate = new Label();
+            lblName = new Label();
+            lblSize = new Label();
+            ((System.ComponentModel.ISupportInitialize)picBox).BeginInit();
+            SuspendLayout();
+            // 
+            // picBox
+            // 
+            picBox.Location = new Point(65, 20);
+            picBox.Margin = new Padding(4, 4, 4, 4);
+            picBox.Name = "picBox";
+            picBox.Size = new Size(260, 192);
+            picBox.TabIndex = 0;
+            picBox.TabStop = false;
+            // 
+            // chkSelect
+            // 
+            chkSelect.AutoSize = true;
+            chkSelect.Location = new Point(16, 108);
+            chkSelect.Margin = new Padding(4, 4, 4, 4);
+            chkSelect.Name = "chkSelect";
+            chkSelect.Size = new Size(28, 27);
+            chkSelect.TabIndex = 1;
+            chkSelect.UseVisualStyleBackColor = true;
+            // 
+            // lblDate
+            // 
+            lblDate.AutoSize = true;
+            lblDate.Font = new Font("Yu Gothic UI", 10F);
+            lblDate.Location = new Point(351, 90);
+            lblDate.Margin = new Padding(4, 0, 4, 0);
+            lblDate.Name = "lblDate";
+            lblDate.Size = new Size(145, 37);
+            lblDate.TabIndex = 2;
+            lblDate.Text = "Date / Size";
+            // 
+            // lblName
+            // 
+            lblName.AutoSize = true;
+            lblName.Font = new Font("Yu Gothic UI", 11F, FontStyle.Bold);
+            lblName.Location = new Point(351, 42);
+            lblName.Margin = new Padding(4, 0, 4, 0);
+            lblName.Name = "lblName";
+            lblName.Size = new Size(100, 41);
+            lblName.TabIndex = 3;
+            lblName.Text = "Name";
+            // 
+            // lblSize
+            // 
+            lblSize.AutoSize = true;
+            lblSize.Font = new Font("Yu Gothic UI", 10F);
+            lblSize.Location = new Point(351, 140);
+            lblSize.Margin = new Padding(4, 0, 4, 0);
+            lblSize.Name = "lblSize";
+            lblSize.Size = new Size(145, 37);
+            lblSize.TabIndex = 4;
+            lblSize.Text = "Date / Size";
+            // 
+            // ThumbnailCard
+            // 
+            AutoScaleDimensions = new SizeF(13F, 32F);
+            AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(lblSize);
+            Controls.Add(lblName);
+            Controls.Add(lblDate);
+            Controls.Add(chkSelect);
+            Controls.Add(picBox);
+            Margin = new Padding(4, 4, 4, 4);
+            Name = "ThumbnailCard";
+            Size = new Size(1024, 243);
+            ((System.ComponentModel.ISupportInitialize)picBox).EndInit();
+            ResumeLayout(false);
+            PerformLayout();
         }
     }
 }

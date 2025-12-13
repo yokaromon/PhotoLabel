@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace PhotoLabel
@@ -11,6 +11,7 @@ namespace PhotoLabel
     {
         private const string ConfigFileName = "Config.ini";
         private const string TargetDirKey = "TargetDir";
+        private string _currentPreviewPath = string.Empty;
 
         public FrmMain()
         {
@@ -175,6 +176,7 @@ namespace PhotoLabel
                 foreach (var filePath in files)
                 {
                     var card = new ThumbnailCard(filePath);
+                    WireCardEvents(card, filePath);
                     flowThumbs.Controls.Add(card);
                 }
             }
@@ -185,6 +187,48 @@ namespace PhotoLabel
             finally
             {
                 flowThumbs.ResumeLayout();
+            }
+        }
+
+        private void WireCardEvents(ThumbnailCard card, string filePath)
+        {
+            card.Click += (_, _) => ShowPreview(filePath);
+            card.SelectionCheckBox.Click += (_, _) => ShowPreview(filePath);
+            card.SelectionCheckBox.CheckedChanged += (_, _) => { _ = RunOcrAsync(filePath); };
+        }
+
+        private void ShowPreview(string filePath)
+        {
+            _currentPreviewPath = filePath;
+            try
+            {
+                // Avoid locking source file by copying to memory
+                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var img = Image.FromStream(fs, useEmbeddedColorManagement: false, validateImageData: false);
+                picFullSize.Image?.Dispose();
+                picFullSize.Image = new Bitmap(img);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load preview.{Environment.NewLine}{ex.Message}", "Preview Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+
+            _ = RunOcrAsync(filePath);
+        }
+
+        private async Task RunOcrAsync(string filePath)
+        {
+            try
+            {
+                txtOcr.Text = "Running OCR...";
+                await Task.Delay(200); // placeholder for async OCR
+
+                // TODO: integrate actual OCR service (Vision/proxy) and replace rules
+                txtOcr.Text = $"[OCR stub]\r\n{Path.GetFileName(filePath)}";
+            }
+            catch (Exception ex)
+            {
+                txtOcr.Text = $"OCR failed: {ex.Message}";
             }
         }
     }
