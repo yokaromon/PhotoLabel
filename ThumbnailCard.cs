@@ -19,6 +19,7 @@ namespace PhotoLabel
 
         public string FilePath { get; private set; } = string.Empty;
         public CheckBox SelectionCheckBox => chkSelect;
+        public bool IsSelected { get; private set; }
 
         public ThumbnailCard(string filePath)
         {
@@ -35,6 +36,12 @@ namespace PhotoLabel
             picBox.SizeMode = PictureBoxSizeMode.Zoom;
             picBox.BorderStyle = BorderStyle.FixedSingle;
             picBox.BackColor = SystemColors.ControlLight;
+
+            // Bubble child clicks to parent so selection always triggers
+            picBox.Click += BubbleClick;
+            lblName.Click += BubbleClick;
+            lblDate.Click += BubbleClick;
+            lblSize.Click += BubbleClick;
 
             LoadMetadata(filePath);
         }
@@ -94,6 +101,13 @@ namespace PhotoLabel
             return thumbPath;
         }
 
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
+            BackColor = selected ? Color.LightSteelBlue : SystemColors.Window;
+            Invalidate();
+        }
+
         private static void GenerateThumbnail(string sourcePath, string thumbPath, int width, int height)
         {
             using var fs = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -110,6 +124,11 @@ namespace PhotoLabel
             g.DrawImage(img, 0, 0, w, h);
 
             bmp.Save(thumbPath, System.Drawing.Imaging.ImageFormat.Jpeg);
+        }
+
+        private void BubbleClick(object? sender, EventArgs e)
+        {
+            OnClick(e);
         }
 
         private static string ComputePathHash(string input)
@@ -139,6 +158,8 @@ namespace PhotoLabel
             picBox.Margin = new Padding(4, 4, 4, 4);
             picBox.Name = "picBox";
             picBox.Size = new Size(260, 192);
+            picBox.SizeMode = PictureBoxSizeMode.Zoom;
+            picBox.BorderStyle = BorderStyle.FixedSingle;
             picBox.TabIndex = 0;
             picBox.TabStop = false;
             // 
