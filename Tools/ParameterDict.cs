@@ -16,6 +16,7 @@ namespace Tools{
     public class ParameterDict
     {
         string mFileName = Common.RelativePath(@"Format.ini");
+        const string SPLITER = ",";
         public string FileName
         {
             get
@@ -721,7 +722,7 @@ namespace Tools{
             {
                 return null;
             }
-            String[] items = value.Split( Common.Spliter );
+            String[] items = value.Split( SPLITER );
             return items;
         }
 

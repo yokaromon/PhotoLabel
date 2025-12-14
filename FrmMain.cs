@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -59,10 +60,97 @@ namespace PhotoLabel
                 LoadImagesForDirectory(targetDir);
 
                 InitializeOcrServices(configPath);
+                LoadItemsFromConfig(configPath);
+                if (cmbItems.Items.Count > 0)
+                {
+                    cmbItems.SelectedIndex = 0;
+                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to load directory tree.{Environment.NewLine}{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LoadItemsFromConfig(string configPath)
+        {
+            try
+            {
+                var dict = new Tools.ParameterDict(configPath);
+                LoadItemList(dict);
+                LoadItemCombos(dict);
+            }
+            catch
+            {
+                // ignore load errors
+            }
+        }
+
+        private void LoadItemList(Tools.ParameterDict dict)
+        {
+            var keys = dict.GetKeyArray("Items");
+            if (keys == null || keys.Length == 0)
+            {
+                return;
+            }
+
+            cmbItems.Items.Clear();
+            foreach (var key in keys)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    cmbItems.Items.Add(key);
+                }
+            }
+        }
+
+        private void LoadItemCombos(Tools.ParameterDict dict)
+        {
+            PopulateComboFromItems(Item2, "Item2", dict);
+            PopulateComboFromItems(Item3, "Item3", dict);
+            PopulateComboFromItems(Item4, "Item4", dict);
+        }
+
+        private static void PopulateComboFromItems(ComboBox combo, string itemKey, Tools.ParameterDict dict)
+        {
+            var values = dict.GetValueArray("Items", itemKey);
+            combo.Items.Clear();
+            if (values == null)
+            {
+                return;
+            }
+
+            foreach (var value in values)
+            {
+                var trimmed = (value ?? string.Empty).Trim();
+                if (!string.IsNullOrEmpty(trimmed))
+                {
+                    combo.Items.Add(trimmed);
+                }
+            }
+
+            if (combo.Items.Count > 0)
+            {
+                combo.SelectedIndex = 0;
+            }
+        }
+
+        private void UpdateItemPreview()
+        {
+            var key = cmbItems.SelectedItem as string ?? cmbItems.Text;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                txtItems.Text = string.Empty;
+                return;
+            }
+            try
+            {
+                var dict = new Tools.ParameterDict(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName));
+                txtItems.Text = dict.GetValue("Items", key, string.Empty) ?? string.Empty;
+            }
+            catch
+            {
+                txtItems.Text = string.Empty;
             }
         }
 
@@ -353,6 +441,46 @@ namespace PhotoLabel
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to initialize OCR service.{Environment.NewLine}{ex.Message}", "OCR Init Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void cmbItems_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            UpdateItemPreview();
+        }
+
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            var key = cmbItems.SelectedItem as string ?? cmbItems.Text;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                MessageBox.Show("保存する項目を選択してください。", "Save", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName);
+            try
+            {
+                var itemValues = new Dictionary<string, string>
+                {
+                    { key, txtItems.Text ?? string.Empty }
+                };
+                Tools.ParameterDict.SaveValues("Items", itemValues, configPath);
+
+                if (!string.IsNullOrWhiteSpace(txtTargetDir.Text))
+                {
+                    var targetDirValue = new Dictionary<string, string>
+                    {
+                        { TargetDirKey, txtTargetDir.Text }
+                    };
+                    Tools.ParameterDict.SaveValues("Config", targetDirValue, configPath);
+                }
+
+                MessageBox.Show("保存しました。", "Save", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"保存に失敗しました。{Environment.NewLine}{ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
