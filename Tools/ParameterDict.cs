@@ -619,6 +619,7 @@ namespace Tools{
                 if( newSection != null && newSection != aCurrentSection )
                 {
                     aCurrentSection = newSection;
+                    aNewList.Add(aOrgList[aOrgListPosition]);
                     return;
                 }
 

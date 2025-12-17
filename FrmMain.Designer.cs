@@ -36,20 +36,24 @@ namespace PhotoLabel
             splitContainer2 = new SplitContainer();
             flowThumbs = new FlowLayoutPanel();
             pnlAction = new Panel();
-            Item1 = new TextBox();
-            Item4 = new ComboBox();
-            Item3 = new ComboBox();
-            Item2 = new ComboBox();
             splitContainer3 = new SplitContainer();
             webViewPreview = new WebView2();
             txtOcr = new TextBox();
             pnlControl = new Panel();
+            btnRename = new Button();
+            btnMove = new Button();
+            cbxSelect = new CheckBox();
+            Item1 = new TextBox();
+            Item4 = new ComboBox();
+            Item3 = new ComboBox();
+            Item2 = new ComboBox();
             tabPage2 = new TabPage();
             label1 = new Label();
             txtTargetDir = new TextBox();
             btnSave = new Button();
             txtItems = new TextBox();
             cmbItems = new ComboBox();
+            cmbSort = new ComboBox();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
@@ -66,6 +70,7 @@ namespace PhotoLabel
             splitContainer3.Panel2.SuspendLayout();
             splitContainer3.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)webViewPreview).BeginInit();
+            pnlControl.SuspendLayout();
             tabPage2.SuspendLayout();
             SuspendLayout();
             // 
@@ -95,7 +100,7 @@ namespace PhotoLabel
             // splitContainer1
             // 
             splitContainer1.Dock = DockStyle.Fill;
-            splitContainer1.Location = new Point(3, 201);
+            splitContainer1.Location = new Point(3, 80);
             splitContainer1.Name = "splitContainer1";
             // 
             // splitContainer1.Panel1
@@ -105,7 +110,7 @@ namespace PhotoLabel
             // splitContainer1.Panel2
             // 
             splitContainer1.Panel2.Controls.Add(splitContainer2);
-            splitContainer1.Size = new Size(1743, 685);
+            splitContainer1.Size = new Size(1743, 806);
             splitContainer1.SplitterDistance = 453;
             splitContainer1.TabIndex = 4;
             // 
@@ -114,7 +119,7 @@ namespace PhotoLabel
             treDir.Dock = DockStyle.Fill;
             treDir.Location = new Point(0, 0);
             treDir.Name = "treDir";
-            treDir.Size = new Size(453, 685);
+            treDir.Size = new Size(453, 806);
             treDir.TabIndex = 0;
             // 
             // splitContainer2
@@ -131,7 +136,7 @@ namespace PhotoLabel
             // splitContainer2.Panel2
             // 
             splitContainer2.Panel2.Controls.Add(splitContainer3);
-            splitContainer2.Size = new Size(1286, 685);
+            splitContainer2.Size = new Size(1286, 806);
             splitContainer2.SplitterDistance = 934;
             splitContainer2.TabIndex = 0;
             // 
@@ -140,56 +145,23 @@ namespace PhotoLabel
             flowThumbs.AutoScroll = true;
             flowThumbs.Dock = DockStyle.Fill;
             flowThumbs.FlowDirection = FlowDirection.TopDown;
-            flowThumbs.Location = new Point(0, 127);
+            flowThumbs.Location = new Point(0, 63);
             flowThumbs.Margin = new Padding(6);
             flowThumbs.Name = "flowThumbs";
             flowThumbs.Padding = new Padding(12);
-            flowThumbs.Size = new Size(934, 558);
+            flowThumbs.Size = new Size(934, 743);
             flowThumbs.TabIndex = 0;
             flowThumbs.WrapContents = false;
             // 
             // pnlAction
             // 
-            pnlAction.Controls.Add(Item1);
-            pnlAction.Controls.Add(Item4);
-            pnlAction.Controls.Add(Item3);
-            pnlAction.Controls.Add(Item2);
+            pnlAction.Controls.Add(cmbSort);
+            pnlAction.Controls.Add(cbxSelect);
             pnlAction.Dock = DockStyle.Top;
             pnlAction.Location = new Point(0, 0);
             pnlAction.Name = "pnlAction";
-            pnlAction.Size = new Size(934, 127);
+            pnlAction.Size = new Size(934, 63);
             pnlAction.TabIndex = 0;
-            // 
-            // Item1
-            // 
-            Item1.Location = new Point(66, 19);
-            Item1.Name = "Item1";
-            Item1.Size = new Size(327, 39);
-            Item1.TabIndex = 4;
-            // 
-            // Item4
-            // 
-            Item4.FormattingEnabled = true;
-            Item4.Location = new Point(433, 78);
-            Item4.Name = "Item4";
-            Item4.Size = new Size(324, 40);
-            Item4.TabIndex = 3;
-            // 
-            // Item3
-            // 
-            Item3.FormattingEnabled = true;
-            Item3.Location = new Point(69, 78);
-            Item3.Name = "Item3";
-            Item3.Size = new Size(324, 40);
-            Item3.TabIndex = 2;
-            // 
-            // Item2
-            // 
-            Item2.FormattingEnabled = true;
-            Item2.Location = new Point(433, 21);
-            Item2.Name = "Item2";
-            Item2.Size = new Size(332, 40);
-            Item2.TabIndex = 1;
             // 
             // splitContainer3
             // 
@@ -205,8 +177,8 @@ namespace PhotoLabel
             // splitContainer3.Panel2
             // 
             splitContainer3.Panel2.Controls.Add(txtOcr);
-            splitContainer3.Size = new Size(348, 685);
-            splitContainer3.SplitterDistance = 330;
+            splitContainer3.Size = new Size(348, 806);
+            splitContainer3.SplitterDistance = 387;
             splitContainer3.TabIndex = 0;
             // 
             // webViewPreview
@@ -217,7 +189,7 @@ namespace PhotoLabel
             webViewPreview.Dock = DockStyle.Fill;
             webViewPreview.Location = new Point(0, 0);
             webViewPreview.Name = "webViewPreview";
-            webViewPreview.Size = new Size(348, 330);
+            webViewPreview.Size = new Size(348, 387);
             webViewPreview.TabIndex = 0;
             webViewPreview.ZoomFactor = 1D;
             // 
@@ -227,16 +199,83 @@ namespace PhotoLabel
             txtOcr.Location = new Point(0, 0);
             txtOcr.Multiline = true;
             txtOcr.Name = "txtOcr";
-            txtOcr.Size = new Size(348, 351);
+            txtOcr.Size = new Size(348, 415);
             txtOcr.TabIndex = 0;
             // 
             // pnlControl
             // 
+            pnlControl.Controls.Add(btnRename);
+            pnlControl.Controls.Add(btnMove);
+            pnlControl.Controls.Add(Item1);
+            pnlControl.Controls.Add(Item4);
+            pnlControl.Controls.Add(Item3);
+            pnlControl.Controls.Add(Item2);
             pnlControl.Dock = DockStyle.Top;
             pnlControl.Location = new Point(3, 3);
             pnlControl.Name = "pnlControl";
-            pnlControl.Size = new Size(1743, 198);
+            pnlControl.Size = new Size(1743, 77);
             pnlControl.TabIndex = 5;
+            // 
+            // btnRename
+            // 
+            btnRename.Location = new Point(1352, 14);
+            btnRename.Name = "btnRename";
+            btnRename.Size = new Size(141, 46);
+            btnRename.TabIndex = 6;
+            btnRename.Text = "名前変更";
+            btnRename.UseVisualStyleBackColor = true;
+            btnRename.Click += btnRename_Click;
+            // 
+            // btnMove
+            // 
+            btnMove.Location = new Point(1499, 14);
+            btnMove.Name = "btnMove";
+            btnMove.Size = new Size(113, 46);
+            btnMove.TabIndex = 7;
+            btnMove.Text = "移動";
+            btnMove.UseVisualStyleBackColor = true;
+            btnMove.Click += btnMove_Click;
+            // 
+            // cbxSelect
+            // 
+            cbxSelect.AutoSize = true;
+            cbxSelect.Location = new Point(15, 17);
+            cbxSelect.Name = "cbxSelect";
+            cbxSelect.Size = new Size(28, 27);
+            cbxSelect.TabIndex = 5;
+            cbxSelect.UseVisualStyleBackColor = true;
+            cbxSelect.CheckedChanged += cbxSelect_CheckedChanged;
+            // 
+            // Item1
+            // 
+            Item1.Location = new Point(13, 15);
+            Item1.Name = "Item1";
+            Item1.Size = new Size(327, 39);
+            Item1.TabIndex = 4;
+            // 
+            // Item4
+            // 
+            Item4.FormattingEnabled = true;
+            Item4.Location = new Point(1014, 15);
+            Item4.Name = "Item4";
+            Item4.Size = new Size(332, 40);
+            Item4.TabIndex = 3;
+            // 
+            // Item3
+            // 
+            Item3.FormattingEnabled = true;
+            Item3.Location = new Point(346, 14);
+            Item3.Name = "Item3";
+            Item3.Size = new Size(324, 40);
+            Item3.TabIndex = 2;
+            // 
+            // Item2
+            // 
+            Item2.FormattingEnabled = true;
+            Item2.Location = new Point(676, 14);
+            Item2.Name = "Item2";
+            Item2.Size = new Size(332, 40);
+            Item2.TabIndex = 1;
             // 
             // tabPage2
             // 
@@ -298,6 +337,17 @@ namespace PhotoLabel
             cmbItems.TabIndex = 0;
             cmbItems.SelectedIndexChanged += cmbItems_SelectedIndexChanged;
             // 
+            // cmbSort
+            //
+            cmbSort.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbSort.FormattingEnabled = true;
+            cmbSort.Items.AddRange(new object[] { "日時順", "名前順" });
+            cmbSort.Location = new Point(91, 14);
+            cmbSort.Name = "cmbSort";
+            cmbSort.Size = new Size(242, 40);
+            cmbSort.TabIndex = 6;
+            cmbSort.SelectedIndexChanged += cmbSort_SelectedIndexChanged;
+            // 
             // FrmMain
             // 
             AutoScaleDimensions = new SizeF(13F, 32F);
@@ -324,6 +374,8 @@ namespace PhotoLabel
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)webViewPreview).EndInit();
+            pnlControl.ResumeLayout(false);
+            pnlControl.PerformLayout();
             tabPage2.ResumeLayout(false);
             tabPage2.PerformLayout();
             ResumeLayout(false);
@@ -353,5 +405,10 @@ namespace PhotoLabel
         private ComboBox cmbItems;
         private Label label1;
         private TextBox txtTargetDir;
+        private Button btnRename;
+        private CheckBox cbxSelect;
+        private Button btnMove;
+        private ComboBox comboBox2;
+        private ComboBox cmbSort;
     }
 }

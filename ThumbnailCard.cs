@@ -11,15 +11,20 @@ namespace PhotoLabel
     /// </summary>
     public class ThumbnailCard : UserControl
     {
-        private PictureBox picBox;
-        private CheckBox chkSelect;
-        private Label lblDate;
-        private Label lblSize;
-        private Label lblName;
+        private PictureBox picBox = null!;
+        private CheckBox chkSelect = null!;
+        private Label lblDate = null!;
+        private Label lblSize = null!;
+        private Label lblName = null!;
+        private TextBox txtRename = null!;
+        private bool _cursorHighlighted;
+        private bool _selectionHighlighted;
+        private Color _groupBackgroundColor = SystemColors.Window;
 
         public string FilePath { get; private set; } = string.Empty;
         public CheckBox SelectionCheckBox => chkSelect;
         public bool IsSelected { get; private set; }
+        public event EventHandler<ThumbnailRenameEventArgs>? RenameRequested;
 
         public ThumbnailCard(string filePath)
         {
@@ -37,13 +42,28 @@ namespace PhotoLabel
             picBox.BorderStyle = BorderStyle.FixedSingle;
             picBox.BackColor = SystemColors.ControlLight;
 
+            txtRename.KeyDown += TxtRename_KeyDown;
+            txtRename.Leave += (_, _) => CancelRenameEdit();
+            DoubleClick += (_, _) => BeginRenameEdit();
+            picBox.DoubleClick += (_, _) => BeginRenameEdit();
+            lblName.DoubleClick += (_, _) => BeginRenameEdit();
+            lblDate.DoubleClick += (_, _) => BeginRenameEdit();
+            lblSize.DoubleClick += (_, _) => BeginRenameEdit();
+
             // Bubble child clicks to parent so selection always triggers
             picBox.Click += BubbleClick;
             lblName.Click += BubbleClick;
             lblDate.Click += BubbleClick;
             lblSize.Click += BubbleClick;
+            SetSelectionHighlight(chkSelect.Checked);
 
             LoadMetadata(filePath);
+        }
+
+        public void UpdateFilePath(string newPath)
+        {
+            FilePath = newPath ?? throw new ArgumentNullException(nameof(newPath));
+            LoadMetadata(newPath);
         }
 
         private void LoadMetadata(string filePath)
@@ -103,9 +123,43 @@ namespace PhotoLabel
 
         public void SetSelected(bool selected)
         {
-            IsSelected = selected;
-            BackColor = selected ? Color.LightSteelBlue : SystemColors.Window;
+            SetCursorHighlight(selected);
+        }
+
+        public void SetSelectionHighlight(bool selected)
+        {
+            if (_selectionHighlighted == selected)
+            {
+                return;
+            }
+
+            _selectionHighlighted = selected;
+            ApplyHighlightState();
+        }
+
+        private void SetCursorHighlight(bool highlighted)
+        {
+            if (_cursorHighlighted == highlighted)
+            {
+                return;
+            }
+
+            _cursorHighlighted = highlighted;
+            ApplyHighlightState();
+        }
+
+        private void ApplyHighlightState()
+        {
+            bool shouldHighlight = _cursorHighlighted || _selectionHighlighted;
+            IsSelected = shouldHighlight;
+            BackColor = shouldHighlight ? Color.LightSteelBlue : _groupBackgroundColor;
             Invalidate();
+        }
+
+        public void SetGroupBackgroundColor(Color color)
+        {
+            _groupBackgroundColor = color;
+            ApplyHighlightState();
         }
 
         private static void GenerateThumbnail(string sourcePath, string thumbPath, int width, int height)
@@ -129,6 +183,106 @@ namespace PhotoLabel
         private void BubbleClick(object? sender, EventArgs e)
         {
             OnClick(e);
+        }
+
+        private void BeginRenameEdit()
+        {
+            bool alreadyEditing = txtRename.Visible;
+            if (alreadyEditing)
+            {
+                return;
+            }
+
+            Rectangle labelBounds = lblName.Bounds;
+            int desiredWidth = Math.Max(labelBounds.Width, 200);
+            int desiredHeight = Math.Max(labelBounds.Height + 4, 30);
+            txtRename.SetBounds(labelBounds.X, labelBounds.Y, desiredWidth, desiredHeight);
+            string currentName = Path.GetFileName(FilePath);
+            txtRename.Text = currentName;
+            txtRename.Visible = true;
+            txtRename.BringToFront();
+            txtRename.Focus();
+            int extensionIndex = currentName.LastIndexOf(".", StringComparison.Ordinal);
+            bool hasExtension = extensionIndex > 0;
+            if (hasExtension)
+            {
+                txtRename.SelectionStart = 0;
+                txtRename.SelectionLength = extensionIndex;
+                return;
+            }
+
+            txtRename.SelectAll();
+        }
+
+        private void CancelRenameEdit()
+        {
+            bool editing = txtRename.Visible;
+            if (!editing)
+            {
+                return;
+            }
+
+            txtRename.Visible = false;
+            txtRename.Text = string.Empty;
+        }
+
+        private void CommitRenameEdit()
+        {
+            bool editing = txtRename.Visible;
+            if (!editing)
+            {
+                return;
+            }
+
+            string rawText = txtRename.Text ?? string.Empty;
+            string enteredText = rawText.Trim();
+            bool hasText = !string.IsNullOrWhiteSpace(enteredText);
+            if (!hasText)
+            {
+                CancelRenameEdit();
+                return;
+            }
+
+            ThumbnailRenameEventArgs args = new ThumbnailRenameEventArgs(enteredText);
+            EventHandler<ThumbnailRenameEventArgs>? handler = RenameRequested;
+            if (handler == null)
+            {
+                CancelRenameEdit();
+                return;
+            }
+
+            handler(this, args);
+            bool succeeded = args.Success;
+            if (succeeded)
+            {
+                CancelRenameEdit();
+                return;
+            }
+
+            txtRename.Focus();
+            txtRename.SelectAll();
+        }
+
+        private void TxtRename_KeyDown(object? sender, KeyEventArgs e)
+        {
+            bool isEnter = e.KeyCode == Keys.Enter;
+            if (isEnter)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                CommitRenameEdit();
+                return;
+            }
+
+            bool isEscape = e.KeyCode == Keys.Escape;
+            if (!isEscape)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            CancelRenameEdit();
         }
 
         private static string ComputePathHash(string input)
@@ -172,6 +326,7 @@ namespace PhotoLabel
             chkSelect.Size = new Size(28, 27);
             chkSelect.TabIndex = 1;
             chkSelect.UseVisualStyleBackColor = true;
+            chkSelect.CheckedChanged += ChkSelect_CheckedChanged;
             // 
             // lblDate
             // 
@@ -205,12 +360,24 @@ namespace PhotoLabel
             lblSize.Size = new Size(145, 37);
             lblSize.TabIndex = 4;
             lblSize.Text = "Date / Size";
+            //
+            // txtRename
+            //
+            txtRename = new TextBox();
+            txtRename.Visible = false;
+            txtRename.Font = new Font("Yu Gothic UI", 11F, FontStyle.Bold);
+            txtRename.Location = new Point(351, 42);
+            txtRename.Margin = new Padding(4, 4, 4, 4);
+            txtRename.Name = "txtRename";
+            txtRename.Size = new Size(320, 47);
+            txtRename.TabIndex = 5;
             // 
             // ThumbnailCard
             // 
             AutoScaleDimensions = new SizeF(13F, 32F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(lblSize);
+            Controls.Add(txtRename);
             Controls.Add(lblName);
             Controls.Add(lblDate);
             Controls.Add(chkSelect);
@@ -222,5 +389,22 @@ namespace PhotoLabel
             ResumeLayout(false);
             PerformLayout();
         }
+
+        private void ChkSelect_CheckedChanged(object? sender, EventArgs e)
+        {
+            bool selected = chkSelect.Checked;
+            SetSelectionHighlight(selected);
+        }
+    }
+
+    public sealed class ThumbnailRenameEventArgs : EventArgs
+    {
+        public ThumbnailRenameEventArgs(string proposedName)
+        {
+            ProposedName = proposedName;
+        }
+
+        public string ProposedName { get; }
+        public bool Success { get; set; }
     }
 }
