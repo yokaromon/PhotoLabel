@@ -25,6 +25,7 @@ namespace PhotoLabel
         public CheckBox SelectionCheckBox => chkSelect;
         public bool IsSelected { get; private set; }
         public event EventHandler<ThumbnailRenameEventArgs>? RenameRequested;
+        public event EventHandler? ImageDoubleClick;
 
         public ThumbnailCard(string filePath)
         {
@@ -45,7 +46,7 @@ namespace PhotoLabel
             txtRename.KeyDown += TxtRename_KeyDown;
             txtRename.Leave += (_, _) => CancelRenameEdit();
             DoubleClick += (_, _) => BeginRenameEdit();
-            picBox.DoubleClick += (_, _) => BeginRenameEdit();
+            picBox.DoubleClick += (_, e) => ImageDoubleClick?.Invoke(this, e);
             lblName.DoubleClick += (_, _) => BeginRenameEdit();
             lblDate.DoubleClick += (_, _) => BeginRenameEdit();
             lblSize.DoubleClick += (_, _) => BeginRenameEdit();
@@ -56,6 +57,10 @@ namespace PhotoLabel
             lblDate.Click += BubbleClick;
             lblSize.Click += BubbleClick;
             SetSelectionHighlight(chkSelect.Checked);
+            // picBoxに対してはMouseイベント転送を行わない（DoubleClickを妨げるため）
+            AttachChildMouseForwarders(lblName);
+            AttachChildMouseForwarders(lblDate);
+            AttachChildMouseForwarders(lblSize);
 
             LoadMetadata(filePath);
         }
@@ -183,6 +188,14 @@ namespace PhotoLabel
         private void BubbleClick(object? sender, EventArgs e)
         {
             OnClick(e);
+        }
+
+        private void AttachChildMouseForwarders(Control control)
+        {
+            // 子コントロールでのドラッグ操作もカードのイベントとして扱う
+            control.MouseDown += (_, e) => OnMouseDown(e);
+            control.MouseMove += (_, e) => OnMouseMove(e);
+            control.MouseUp += (_, e) => OnMouseUp(e);
         }
 
         private void BeginRenameEdit()

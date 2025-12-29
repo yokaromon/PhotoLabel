@@ -29,20 +29,28 @@ namespace PhotoLabel
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
             splitContainer1 = new SplitContainer();
+            panel2 = new Panel();
             treDir = new TreeView();
+            treeContextMenu = new ContextMenuStrip(components);
+            menuDeleteDirectory = new ToolStripMenuItem();
+            panel1 = new Panel();
+            txtFind = new TextBox();
             splitContainer2 = new SplitContainer();
             flowThumbs = new FlowLayoutPanel();
             pnlAction = new Panel();
+            cmbSort = new ComboBox();
+            cbxSelect = new CheckBox();
             splitContainer3 = new SplitContainer();
             webViewPreview = new WebView2();
             txtOcr = new TextBox();
             pnlControl = new Panel();
+            btnDelete = new Button();
             btnRename = new Button();
             btnMove = new Button();
-            cbxSelect = new CheckBox();
             Item1 = new TextBox();
             Item4 = new ComboBox();
             Item3 = new ComboBox();
@@ -53,13 +61,15 @@ namespace PhotoLabel
             btnSave = new Button();
             txtItems = new TextBox();
             cmbItems = new ComboBox();
-            cmbSort = new ComboBox();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
+            panel2.SuspendLayout();
+            treeContextMenu.SuspendLayout();
+            panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer2).BeginInit();
             splitContainer2.Panel1.SuspendLayout();
             splitContainer2.Panel2.SuspendLayout();
@@ -105,7 +115,8 @@ namespace PhotoLabel
             // 
             // splitContainer1.Panel1
             // 
-            splitContainer1.Panel1.Controls.Add(treDir);
+            splitContainer1.Panel1.Controls.Add(panel2);
+            splitContainer1.Panel1.Controls.Add(panel1);
             // 
             // splitContainer1.Panel2
             // 
@@ -114,13 +125,55 @@ namespace PhotoLabel
             splitContainer1.SplitterDistance = 453;
             splitContainer1.TabIndex = 4;
             // 
+            // panel2
+            // 
+            panel2.Controls.Add(treDir);
+            panel2.Dock = DockStyle.Fill;
+            panel2.Location = new Point(0, 49);
+            panel2.Name = "panel2";
+            panel2.Size = new Size(453, 757);
+            panel2.TabIndex = 4;
+            // 
             // treDir
             // 
+            treDir.ContextMenuStrip = treeContextMenu;
             treDir.Dock = DockStyle.Fill;
             treDir.Location = new Point(0, 0);
             treDir.Name = "treDir";
-            treDir.Size = new Size(453, 806);
+            treDir.Size = new Size(453, 757);
             treDir.TabIndex = 0;
+            // 
+            // treeContextMenu
+            // 
+            treeContextMenu.ImageScalingSize = new Size(32, 32);
+            treeContextMenu.Items.AddRange(new ToolStripItem[] { menuDeleteDirectory });
+            treeContextMenu.Name = "treeContextMenu";
+            treeContextMenu.Size = new Size(137, 42);
+            // 
+            // menuDeleteDirectory
+            // 
+            menuDeleteDirectory.Name = "menuDeleteDirectory";
+            menuDeleteDirectory.Size = new Size(136, 38);
+            menuDeleteDirectory.Text = "削除";
+            menuDeleteDirectory.Click += menuDeleteDirectory_Click;
+            // 
+            // panel1
+            // 
+            panel1.Controls.Add(txtFind);
+            panel1.Dock = DockStyle.Top;
+            panel1.Location = new Point(0, 0);
+            panel1.Name = "panel1";
+            panel1.Size = new Size(453, 49);
+            panel1.TabIndex = 3;
+            // 
+            // txtFind
+            // 
+            txtFind.Dock = DockStyle.Top;
+            txtFind.Location = new Point(0, 0);
+            txtFind.Name = "txtFind";
+            txtFind.Size = new Size(453, 39);
+            txtFind.TabIndex = 1;
+            txtFind.TextChanged += txtFind_TextChanged;
             // 
             // splitContainer2
             // 
@@ -163,6 +216,27 @@ namespace PhotoLabel
             pnlAction.Size = new Size(934, 63);
             pnlAction.TabIndex = 0;
             // 
+            // cmbSort
+            // 
+            cmbSort.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbSort.FormattingEnabled = true;
+            cmbSort.Items.AddRange(new object[] { "日時順", "名前順" });
+            cmbSort.Location = new Point(91, 14);
+            cmbSort.Name = "cmbSort";
+            cmbSort.Size = new Size(242, 40);
+            cmbSort.TabIndex = 6;
+            cmbSort.SelectedIndexChanged += cmbSort_SelectedIndexChanged;
+            // 
+            // cbxSelect
+            // 
+            cbxSelect.AutoSize = true;
+            cbxSelect.Location = new Point(15, 17);
+            cbxSelect.Name = "cbxSelect";
+            cbxSelect.Size = new Size(28, 27);
+            cbxSelect.TabIndex = 5;
+            cbxSelect.UseVisualStyleBackColor = true;
+            cbxSelect.CheckedChanged += cbxSelect_CheckedChanged;
+            // 
             // splitContainer3
             // 
             splitContainer3.Dock = DockStyle.Fill;
@@ -204,6 +278,7 @@ namespace PhotoLabel
             // 
             // pnlControl
             // 
+            pnlControl.Controls.Add(btnDelete);
             pnlControl.Controls.Add(btnRename);
             pnlControl.Controls.Add(btnMove);
             pnlControl.Controls.Add(Item1);
@@ -215,6 +290,16 @@ namespace PhotoLabel
             pnlControl.Name = "pnlControl";
             pnlControl.Size = new Size(1743, 77);
             pnlControl.TabIndex = 5;
+            // 
+            // btnDelete
+            // 
+            btnDelete.Location = new Point(1618, 14);
+            btnDelete.Name = "btnDelete";
+            btnDelete.Size = new Size(113, 46);
+            btnDelete.TabIndex = 8;
+            btnDelete.Text = "削除";
+            btnDelete.UseVisualStyleBackColor = true;
+            btnDelete.Click += btnDelete_Click;
             // 
             // btnRename
             // 
@@ -235,16 +320,6 @@ namespace PhotoLabel
             btnMove.Text = "移動";
             btnMove.UseVisualStyleBackColor = true;
             btnMove.Click += btnMove_Click;
-            // 
-            // cbxSelect
-            // 
-            cbxSelect.AutoSize = true;
-            cbxSelect.Location = new Point(15, 17);
-            cbxSelect.Name = "cbxSelect";
-            cbxSelect.Size = new Size(28, 27);
-            cbxSelect.TabIndex = 5;
-            cbxSelect.UseVisualStyleBackColor = true;
-            cbxSelect.CheckedChanged += cbxSelect_CheckedChanged;
             // 
             // Item1
             // 
@@ -337,17 +412,6 @@ namespace PhotoLabel
             cmbItems.TabIndex = 0;
             cmbItems.SelectedIndexChanged += cmbItems_SelectedIndexChanged;
             // 
-            // cmbSort
-            //
-            cmbSort.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbSort.FormattingEnabled = true;
-            cmbSort.Items.AddRange(new object[] { "日時順", "名前順" });
-            cmbSort.Location = new Point(91, 14);
-            cmbSort.Name = "cmbSort";
-            cmbSort.Size = new Size(242, 40);
-            cmbSort.TabIndex = 6;
-            cmbSort.SelectedIndexChanged += cmbSort_SelectedIndexChanged;
-            // 
             // FrmMain
             // 
             AutoScaleDimensions = new SizeF(13F, 32F);
@@ -362,6 +426,10 @@ namespace PhotoLabel
             splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
             splitContainer1.ResumeLayout(false);
+            panel2.ResumeLayout(false);
+            treeContextMenu.ResumeLayout(false);
+            panel1.ResumeLayout(false);
+            panel1.PerformLayout();
             splitContainer2.Panel1.ResumeLayout(false);
             splitContainer2.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer2).EndInit();
@@ -410,5 +478,11 @@ namespace PhotoLabel
         private Button btnMove;
         private ComboBox comboBox2;
         private ComboBox cmbSort;
+        private TextBox txtFind;
+        private Panel panel2;
+        private Panel panel1;
+        private Button btnDelete;
+        private ContextMenuStrip treeContextMenu;
+        private ToolStripMenuItem menuDeleteDirectory;
     }
 }

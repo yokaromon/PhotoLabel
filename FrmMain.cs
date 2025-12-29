@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -14,6 +15,7 @@ namespace PhotoLabel
     {
         private const string ConfigFileName = "Config.ini";
         private const string TargetDirKey = "TargetDir";
+        private const string InternalDragFormat = "PhotoLabel.InternalDrag";
         private string _currentPreviewPath = string.Empty;
         private readonly HashSet<ThumbnailCard> _selectedCards = new();
         private ThumbnailCard? _lastSelectedCard;
@@ -24,16 +26,26 @@ namespace PhotoLabel
         private string _currentDirectory = string.Empty;
         private const string DefaultRenamePattern = "{Item1}_{Item2}_{Item3}_{Item4}{Ext}";
         private readonly Dictionary<string, ItemSnapshot> _itemSnapshots = new();
+        private string _treeRootPath = string.Empty;
+        private readonly List<string> _allDirectories = new List<string>();
         private bool _isDragging;
         private Point _dragStartPoint;
         private Point _dragCurrentPoint;
+        private bool _isCardDragPending;
+        private Point _cardDragStartScreenPoint;
+        private ThumbnailCard? _cardDragSource;
+        private readonly System.Windows.Forms.Timer _treeFilterTimer = new System.Windows.Forms.Timer();
+        private string _pendingTreeFilter = string.Empty;
+        private bool _isTreeFiltered;
         private enum SortOrder { Date, Name }
         private SortOrder _currentSortOrder = SortOrder.Date;
+        private FrmPicture? _pictureForm;
 
         public FrmMain()
         {
             InitializeComponent();
             Load += FrmMain_Load;
+            FormClosing += FrmMain_FormClosing;
             treDir.BeforeExpand += TreDir_BeforeExpand;
             treDir.AfterSelect += TreDir_AfterSelect;
             splitContainer2.SizeChanged += (_, _) => AdjustPaneWidthToCard();
@@ -47,6 +59,8 @@ namespace PhotoLabel
             flowThumbs.MouseMove += FlowThumbs_MouseMove;
             flowThumbs.MouseUp += FlowThumbs_MouseUp;
             flowThumbs.Paint += FlowThumbs_Paint;
+            _treeFilterTimer.Interval = 300;
+            _treeFilterTimer.Tick += TreeFilterTimer_Tick;
         }
 
         private void FrmMain_Load(object? sender, EventArgs e)
@@ -90,10 +104,97 @@ namespace PhotoLabel
                 {
                     cmbSort.SelectedIndex = 0;
                 }
+
+                // ウィンドウとスプリッタの位置を復元
+                LoadWindowSettings(configPath);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to load directory tree.{Environment.NewLine}{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void FrmMain_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            try
+            {
+                var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName);
+                SaveWindowSettings(configPath);
+            }
+            catch
+            {
+                // 設定保存エラーは無視
+            }
+        }
+
+        private void LoadWindowSettings(string configPath)
+        {
+            try
+            {
+                var dict = new Tools.ParameterDict(configPath);
+
+                // FrmMainの位置とサイズ
+                int x = int.TryParse(dict.GetValue("Window", "MainX", null), out var mx) ? mx : -1;
+                int y = int.TryParse(dict.GetValue("Window", "MainY", null), out var my) ? my : -1;
+                int width = int.TryParse(dict.GetValue("Window", "MainWidth", null), out var mw) ? mw : -1;
+                int height = int.TryParse(dict.GetValue("Window", "MainHeight", null), out var mh) ? mh : -1;
+
+                bool hasPosition = x >= 0 && y >= 0;
+                bool hasSize = width > 0 && height > 0;
+
+                if (hasPosition && hasSize)
+                {
+                    StartPosition = FormStartPosition.Manual;
+                    Location = new Point(x, y);
+                    Size = new Size(width, height);
+                }
+
+                // スプリッタの位置
+                int split1 = int.TryParse(dict.GetValue("Window", "Split1", null), out var s1) ? s1 : -1;
+                int split2 = int.TryParse(dict.GetValue("Window", "Split2", null), out var s2) ? s2 : -1;
+                int split3 = int.TryParse(dict.GetValue("Window", "Split3", null), out var s3) ? s3 : -1;
+
+                if (split1 > 0 && split1 < splitContainer1.Width - splitContainer1.Panel2MinSize)
+                {
+                    splitContainer1.SplitterDistance = split1;
+                }
+
+                if (split2 > 0 && split2 < splitContainer2.Width - splitContainer2.Panel2MinSize)
+                {
+                    splitContainer2.SplitterDistance = split2;
+                }
+
+                if (split3 > 0 && split3 < splitContainer3.Height - splitContainer3.Panel2MinSize)
+                {
+                    splitContainer3.SplitterDistance = split3;
+                }
+            }
+            catch
+            {
+                // 設定読み込みエラーは無視
+            }
+        }
+
+        private void SaveWindowSettings(string configPath)
+        {
+            try
+            {
+                var settings = new Dictionary<string, string>
+                {
+                    { "MainX", Location.X.ToString() },
+                    { "MainY", Location.Y.ToString() },
+                    { "MainWidth", Width.ToString() },
+                    { "MainHeight", Height.ToString() },
+                    { "Split1", splitContainer1.SplitterDistance.ToString() },
+                    { "Split2", splitContainer2.SplitterDistance.ToString() },
+                    { "Split3", splitContainer3.SplitterDistance.ToString() }
+                };
+
+                Tools.ParameterDict.SaveValues("Window", settings, configPath);
+            }
+            catch
+            {
+                // 設定保存エラーは無視
             }
         }
 
@@ -214,14 +315,63 @@ namespace PhotoLabel
 
         private void PopulateTree(string rootPath)
         {
+            // 現在の展開状態と選択状態を保存
+            HashSet<string> expandedPaths = SaveExpandedNodePaths();
+            string? selectedPath = treDir.SelectedNode?.Tag as string;
+
             treDir.Nodes.Clear();
-            var rootNode = CreateDirectoryNode(rootPath);
+            _treeRootPath = rootPath ?? string.Empty;
+            _isTreeFiltered = false;
+            _pendingTreeFilter = string.Empty;
+
+            bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
+            if (!hasRoot)
+            {
+                _allDirectories.Clear();
+                return;
+            }
+
+            TreeNode rootNode = CreateDirectoryNode(_treeRootPath);
             treDir.Nodes.Add(rootNode);
             LoadChildDirectories(rootNode);
+            CacheDirectoryList(_treeRootPath);
+
+            // 展開状態と選択状態を復元
+            RestoreExpandedNodePaths(expandedPaths);
+            RestoreSelectedNode(selectedPath);
+        }
+
+        private void CacheDirectoryList(string rootPath)
+        {
+            _allDirectories.Clear();
+            bool hasRoot = !string.IsNullOrWhiteSpace(rootPath) && Directory.Exists(rootPath);
+            if (!hasRoot)
+            {
+                return;
+            }
+
+            // ルート配下のディレクトリ情報をあらかじめキャッシュしてフィルタ速度を確保
+            _allDirectories.Add(rootPath);
+            try
+            {
+                foreach (string directory in Directory.EnumerateDirectories(rootPath, "*", SearchOption.AllDirectories))
+                {
+                    _allDirectories.Add(directory);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"フォルダ一覧の取得に失敗しました。{Environment.NewLine}{ex.Message}", "Tree Filter", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void TreDir_BeforeExpand(object? sender, TreeViewCancelEventArgs e)
         {
+            if (_isTreeFiltered)
+            {
+                return;
+            }
+
             LoadChildDirectories(e.Node);
         }
 
@@ -264,20 +414,121 @@ namespace PhotoLabel
             }
         }
 
-        private static TreeNode CreateDirectoryNode(string path)
+        private static TreeNode CreateDirectoryNode(string path, bool includePlaceholder = true)
         {
-            var directoryName = new DirectoryInfo(path).Name;
+            DirectoryInfo info = new DirectoryInfo(path);
+            string directoryName = info.Name;
             if (string.IsNullOrEmpty(directoryName))
             {
                 directoryName = path;
             }
 
-            var node = new TreeNode(directoryName)
+            TreeNode node = new TreeNode(directoryName)
             {
                 Tag = path
             };
 
-            node.Nodes.Add(new TreeNode());
+            if (includePlaceholder)
+            {
+                node.Nodes.Add(new TreeNode());
+            }
+
+            return node;
+        }
+
+        private void ApplyTreeFilter(string keyword)
+        {
+            bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
+            if (!hasRoot)
+            {
+                return;
+            }
+
+            string baseKeyword = keyword ?? string.Empty;
+            string trimmedKeyword = baseKeyword.Trim();
+            bool hasKeyword = trimmedKeyword.Length > 0;
+
+            treDir.BeginUpdate();
+            try
+            {
+                treDir.Nodes.Clear();
+                TreeNode rootNode = CreateDirectoryNode(_treeRootPath, false);
+                treDir.Nodes.Add(rootNode);
+
+                List<string> matchedDirectories = new List<string>();
+                foreach (string directory in _allDirectories)
+                {
+                    bool shouldInclude = !hasKeyword || directory.IndexOf(trimmedKeyword, StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (shouldInclude)
+                    {
+                        matchedDirectories.Add(directory);
+                    }
+                }
+
+                if (matchedDirectories.Count == 0)
+                {
+                    _isTreeFiltered = hasKeyword;
+                    return;
+                }
+
+                matchedDirectories.Sort(StringComparer.OrdinalIgnoreCase);
+                foreach (string directory in matchedDirectories)
+                {
+                    AddPathNodes(rootNode, directory);
+                }
+
+                rootNode.Expand();
+                rootNode.ExpandAll();
+                _isTreeFiltered = hasKeyword;
+            }
+            finally
+            {
+                treDir.EndUpdate();
+            }
+        }
+
+        private void AddPathNodes(TreeNode rootNode, string fullPath)
+        {
+            bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath);
+            if (!hasRoot)
+            {
+                return;
+            }
+
+            string relativePath = Path.GetRelativePath(_treeRootPath, fullPath);
+            bool isRootPath = string.IsNullOrWhiteSpace(relativePath) || relativePath == ".";
+            if (isRootPath)
+            {
+                return;
+            }
+
+            char[] separators = new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+            string[] segments = relativePath.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+            TreeNode currentNode = rootNode;
+            string currentPath = _treeRootPath;
+
+            foreach (string segment in segments)
+            {
+                currentPath = Path.Combine(currentPath, segment);
+                currentNode = FindOrCreateChildNode(currentNode, currentPath);
+            }
+
+            currentNode.EnsureVisible();
+        }
+
+        private TreeNode FindOrCreateChildNode(TreeNode parent, string path)
+        {
+            foreach (TreeNode child in parent.Nodes)
+            {
+                bool samePath = child.Tag is string childPath && string.Equals(childPath, path, StringComparison.OrdinalIgnoreCase);
+                if (samePath)
+                {
+                    return child;
+                }
+            }
+
+            TreeNode node = CreateDirectoryNode(path, false);
+            parent.Nodes.Add(node);
             return node;
         }
 
@@ -363,6 +614,13 @@ namespace PhotoLabel
         private void WireCardEvents(ThumbnailCard card)
         {
             card.Click += (_, _) => HandleCardClick(card, card.FilePath);
+            card.ImageDoubleClick += (sender, _) =>
+            {
+                if (sender is ThumbnailCard c)
+                {
+                    HandleCardDoubleClick(c.FilePath);
+                }
+            };
             card.SelectionCheckBox.Click += (_, _) => SelectAndPreview(card, card.FilePath);
             card.SelectionCheckBox.CheckedChanged += (_, _) =>
             {
@@ -375,6 +633,9 @@ namespace PhotoLabel
                 _ = RunOcrAsync(path);
             };
             card.RenameRequested += Card_RenameRequested;
+            card.MouseDown += Card_MouseDown;
+            card.MouseMove += Card_MouseMove;
+            card.MouseUp += Card_MouseUp;
         }
 
         private void Card_RenameRequested(object? sender, ThumbnailRenameEventArgs e)
@@ -647,6 +908,65 @@ namespace PhotoLabel
             }
 
             _ = RunOcrAsync(filePath);
+
+            // FrmPictureが開いている場合は画像を更新
+            UpdatePictureForm(filePath);
+        }
+
+        private void HandleCardDoubleClick(string filePath)
+        {
+            bool hasPath = !string.IsNullOrWhiteSpace(filePath);
+            if (!hasPath)
+            {
+                return;
+            }
+
+            bool fileExists = File.Exists(filePath);
+            if (!fileExists)
+            {
+                return;
+            }
+
+            // FrmPictureが既に開いている場合
+            bool formIsOpen = _pictureForm != null && !_pictureForm.IsDisposed;
+            if (formIsOpen && _pictureForm != null)
+            {
+                _pictureForm.ShowImage(filePath);
+                _pictureForm.BringToFront();
+                _pictureForm.Activate();
+                return;
+            }
+
+            // 新しくFrmPictureを開く
+            _pictureForm = new FrmPicture();
+            _pictureForm.Owner = this;
+            _pictureForm.FormClosed += (_, _) => _pictureForm = null;
+            _pictureForm.ShowImage(filePath);
+            _pictureForm.Show();
+            _pictureForm.BringToFront();
+        }
+
+        private void UpdatePictureForm(string filePath)
+        {
+            bool formIsOpen = _pictureForm != null && !_pictureForm.IsDisposed;
+            if (!formIsOpen)
+            {
+                return;
+            }
+
+            bool hasPath = !string.IsNullOrWhiteSpace(filePath);
+            if (!hasPath)
+            {
+                return;
+            }
+
+            bool fileExists = File.Exists(filePath);
+            if (!fileExists)
+            {
+                return;
+            }
+
+            _pictureForm?.ShowImage(filePath);
         }
 
         private async Task RunOcrAsync(string filePath)
@@ -1216,7 +1536,17 @@ namespace PhotoLabel
 
         private void FlowThumbs_DragEnter(object? sender, DragEventArgs e)
         {
-            if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop))
+            // 内部ドラッグの場合は拒否
+            bool isInternalDrag = e.Data != null && e.Data.GetDataPresent(InternalDragFormat);
+            if (isInternalDrag)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            // 外部からのファイルドロップは受け入れ
+            bool hasFileDrop = e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop);
+            if (hasFileDrop)
             {
                 e.Effect = DragDropEffects.Copy;
             }
@@ -1228,6 +1558,13 @@ namespace PhotoLabel
 
         private void FlowThumbs_DragDrop(object? sender, DragEventArgs e)
         {
+            // 内部ドラッグの場合は何もしない
+            bool isInternalDrag = e.Data != null && e.Data.GetDataPresent(InternalDragFormat);
+            if (isInternalDrag)
+            {
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(_currentDirectory) || !Directory.Exists(_currentDirectory))
             {
                 MessageBox.Show("フォルダが選択されていません。", "Drag & Drop", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1251,6 +1588,15 @@ namespace PhotoLabel
                     if (string.IsNullOrWhiteSpace(ext) || !extensions.Any(x => ext.Equals(x, StringComparison.OrdinalIgnoreCase)))
                     {
                         continue; // skip non-image
+                    }
+
+                    // 同じディレクトリにあるファイルは無視（同一ファイルのコピーを防ぐ）
+                    string? sourceDir = Path.GetDirectoryName(path);
+                    bool isSameDirectory = !string.IsNullOrWhiteSpace(sourceDir) &&
+                                          string.Equals(sourceDir, _currentDirectory, StringComparison.OrdinalIgnoreCase);
+                    if (isSameDirectory)
+                    {
+                        continue;
                     }
 
                     var destName = Path.GetFileName(path);
@@ -1453,7 +1799,12 @@ namespace PhotoLabel
                 ClearAllSelections();
                 _lastSelectedCard = null;
                 LoadImagesForDirectory(_currentDirectory);
-                PopulateTree(_currentDirectory);
+
+                bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
+                if (hasRoot)
+                {
+                    PopulateTree(_treeRootPath);
+                }
             }
             finally
             {
@@ -1482,15 +1833,93 @@ namespace PhotoLabel
             }
 
             Control? controlAtPoint = flowThumbs.GetChildAtPoint(e.Location);
-            bool clickedOnCard = controlAtPoint is ThumbnailCard;
+            ThumbnailCard? cardAtPoint = controlAtPoint as ThumbnailCard;
+            bool clickedOnCard = cardAtPoint != null;
             if (clickedOnCard)
             {
+                Point screenPoint = flowThumbs.PointToScreen(e.Location);
+                HandleCardMouseDown(cardAtPoint!, screenPoint);
                 return;
             }
 
             _isDragging = true;
             _dragStartPoint = e.Location;
             _dragCurrentPoint = e.Location;
+        }
+
+        private void Card_MouseDown(object? sender, MouseEventArgs e)
+        {
+            bool isLeftButton = e.Button == MouseButtons.Left;
+            if (!isLeftButton)
+            {
+                return;
+            }
+
+            ThumbnailCard? card = sender as ThumbnailCard;
+            if (card == null)
+            {
+                return;
+            }
+
+            Point screenPoint = Cursor.Position;
+            HandleCardMouseDown(card, screenPoint);
+        }
+
+        private void Card_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (!_isCardDragPending)
+            {
+                return;
+            }
+
+            Point currentScreenPoint = Cursor.Position;
+            TryStartCardDrag(currentScreenPoint);
+        }
+
+        private void Card_MouseUp(object? sender, MouseEventArgs e)
+        {
+            bool isLeftButton = e.Button == MouseButtons.Left;
+            if (!isLeftButton)
+            {
+                return;
+            }
+
+            if (_isCardDragPending)
+            {
+                ThumbnailCard? card = sender as ThumbnailCard;
+                bool wasClick = card != null && !HasExceededDragThreshold(_cardDragStartScreenPoint, Cursor.Position);
+                if (wasClick && card != null)
+                {
+                    _ = ShowPreviewAsync(card.FilePath);
+                }
+
+                ResetCardDragState();
+            }
+        }
+
+        private void HandleCardMouseDown(ThumbnailCard card, Point screenPoint)
+        {
+            // カードをドラッグ対象にする前に選択状態を整える
+            bool alreadySelected = _selectedCards.Contains(card);
+            if (!alreadySelected)
+            {
+                bool ctrlPressed = (Control.ModifierKeys & Keys.Control) == Keys.Control;
+                if (!ctrlPressed)
+                {
+                    ClearAllSelections();
+                }
+
+                AddToSelection(card);
+            }
+
+            _lastSelectedCard = card;
+            _isCardDragPending = true;
+            _cardDragStartScreenPoint = screenPoint;
+            _cardDragSource = card;
+            if (_cardDragSource != null)
+            {
+                _cardDragSource.Capture = true;
+            }
         }
 
         private void FlowThumbs_MouseMove(object? sender, MouseEventArgs e)
@@ -1506,6 +1935,11 @@ namespace PhotoLabel
 
         private void FlowThumbs_MouseUp(object? sender, MouseEventArgs e)
         {
+            if (_isCardDragPending)
+            {
+                ResetCardDragState();
+            }
+
             if (!_isDragging)
             {
                 return;
@@ -1560,6 +1994,168 @@ namespace PhotoLabel
             e.Graphics.FillRectangle(brush, selectionRect);
         }
 
+        private void TryStartCardDrag(Point currentScreenPoint)
+        {
+            // ドラッグ距離を監視し、閾値を超えたら外部アプリへのD&Dを実施
+            bool pendingDrag = _isCardDragPending;
+            if (!pendingDrag)
+            {
+                return;
+            }
+
+            bool hasSource = _cardDragSource != null;
+            if (!hasSource)
+            {
+                ResetCardDragState();
+                return;
+            }
+
+            bool leftPressed = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
+            if (!leftPressed)
+            {
+                ResetCardDragState();
+                return;
+            }
+
+            bool movedEnough = HasExceededDragThreshold(_cardDragStartScreenPoint, currentScreenPoint);
+            if (!movedEnough)
+            {
+                return;
+            }
+
+            List<string> selectedFiles = GetCheckedFilePathsInDisplayOrder();
+            bool hasFiles = selectedFiles.Count > 0;
+            if (!hasFiles)
+            {
+                ResetCardDragState();
+                return;
+            }
+
+            BeginExternalCardDrag(selectedFiles);
+        }
+
+        private void BeginExternalCardDrag(List<string> filePaths)
+        {
+            // 選択ファイルのパスをFileDrop形式で外部アプリに渡す
+            DataObject dataObject = new DataObject();
+            StringCollection dropList = new StringCollection();
+            string[] fileArray = filePaths.ToArray();
+            dropList.AddRange(fileArray);
+            dataObject.SetFileDropList(dropList);
+            // 内部ドラッグであることを示すマーカーを追加
+            dataObject.SetData(InternalDragFormat, true);
+
+            DragDropEffects allowedEffects = DragDropEffects.Copy | DragDropEffects.Move;
+            DragDropEffects dragResult = flowThumbs.DoDragDrop(dataObject, allowedEffects);
+            HandleExternalDragCompleted(dragResult, filePaths);
+            ResetCardDragState();
+        }
+
+        private void HandleExternalDragCompleted(DragDropEffects dragResult, List<string> draggedFiles)
+        {
+            // 移動として完了した場合は一覧を最新化する
+            bool moveRequested = (dragResult & DragDropEffects.Move) == DragDropEffects.Move;
+            if (!moveRequested)
+            {
+                return;
+            }
+
+            bool requiresRefresh = false;
+            foreach (string filePath in draggedFiles)
+            {
+                bool fileStillExists = File.Exists(filePath);
+                if (fileStillExists)
+                {
+                    continue;
+                }
+
+                requiresRefresh = true;
+                break;
+            }
+
+            if (!requiresRefresh)
+            {
+                return;
+            }
+
+            RefreshAfterMove();
+        }
+
+        private List<string> GetCheckedFilePathsInDisplayOrder()
+        {
+            // FlowLayoutPanel上の表示順序でチェック済ファイルを収集
+            List<string> filePaths = new List<string>();
+            foreach (Control control in flowThumbs.Controls)
+            {
+                ThumbnailCard? card = control as ThumbnailCard;
+                bool isCard = card != null;
+                if (!isCard)
+                {
+                    continue;
+                }
+
+                bool isChecked = card.SelectionCheckBox.Checked;
+                if (!isChecked)
+                {
+                    continue;
+                }
+
+                bool hasPath = !string.IsNullOrWhiteSpace(card.FilePath);
+                if (!hasPath)
+                {
+                    continue;
+                }
+
+                filePaths.Add(card.FilePath);
+            }
+
+            bool hasCheckedFiles = filePaths.Count > 0;
+            if (hasCheckedFiles)
+            {
+                return filePaths;
+            }
+
+            ThumbnailCard? dragSource = _cardDragSource;
+            bool hasDragSource = dragSource != null && !string.IsNullOrWhiteSpace(dragSource.FilePath);
+            if (hasDragSource && dragSource != null)
+            {
+                List<string> fallbackList = new List<string>
+                {
+                    dragSource.FilePath
+                };
+                return fallbackList;
+            }
+
+            return filePaths;
+        }
+
+        private static bool HasExceededDragThreshold(Point startPoint, Point currentPoint)
+        {
+            // Windows標準のドラッグ閾値を利用してドラッグ開始を判定
+            int deltaX = Math.Abs(currentPoint.X - startPoint.X);
+            int deltaY = Math.Abs(currentPoint.Y - startPoint.Y);
+            Size dragSize = SystemInformation.DragSize;
+            bool exceedX = deltaX >= dragSize.Width;
+            if (exceedX)
+            {
+                return true;
+            }
+
+            bool exceedY = deltaY >= dragSize.Height;
+            return exceedY;
+        }
+
+        private void ResetCardDragState()
+        {
+            // カードドラッグ用の一時状態を初期化
+            _isCardDragPending = false;
+            if (_cardDragSource != null && _cardDragSource.Capture)
+            {
+                _cardDragSource.Capture = false;
+            }
+            _cardDragSource = null;
+        }
+
         private static Rectangle GetNormalizedRectangle(Point start, Point end)
         {
             int x = Math.Min(start.X, end.X);
@@ -1601,6 +2197,355 @@ namespace PhotoLabel
         private static DateTime GetFileDate(string filePath)
         {
             return File.GetLastWriteTime(filePath).Date;
+        }
+
+        private void txtFind_TextChanged(object sender, EventArgs e)
+        {
+            _pendingTreeFilter = txtFind.Text ?? string.Empty;
+            _treeFilterTimer.Stop();
+            _treeFilterTimer.Start();
+        }
+
+        private void TreeFilterTimer_Tick(object? sender, EventArgs e)
+        {
+            _treeFilterTimer.Stop();
+            ApplyTreeFilter(_pendingTreeFilter);
+        }
+
+        private void btnDelete_Click(object sender, EventArgs e)
+        {
+            // 削除対象のカードを抽出
+            List<ThumbnailCard> targets = flowThumbs.Controls.OfType<ThumbnailCard>()
+                .Where(card => card.SelectionCheckBox.Checked)
+                .ToList();
+            bool hasTargets = targets.Count > 0;
+            if (!hasTargets)
+            {
+                MessageBox.Show("削除するファイルが選択されていません。", "削除", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 削除確認ダイアログ
+            string message = $"選択された {targets.Count} 件のファイルを削除します。よろしいですか？";
+            DialogResult confirmResult = MessageBox.Show(message, "削除確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            bool canceled = confirmResult != DialogResult.Yes;
+            if (canceled)
+            {
+                return;
+            }
+
+            // ファイル削除処理
+            int deletedCount = 0;
+            List<string> errors = new List<string>();
+            foreach (ThumbnailCard card in targets)
+            {
+                string filePath = card.FilePath;
+                bool hasPath = !string.IsNullOrWhiteSpace(filePath);
+                if (!hasPath)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    bool exists = File.Exists(filePath);
+                    if (exists)
+                    {
+                        File.Delete(filePath);
+                    }
+
+                    deletedCount++;
+                    _itemSnapshots.Remove(filePath);
+                    _selectedCards.Remove(card);
+                    flowThumbs.Controls.Remove(card);
+
+                    bool previewMatches = string.Equals(_currentPreviewPath, filePath, StringComparison.OrdinalIgnoreCase);
+                    if (previewMatches)
+                    {
+                        _currentPreviewPath = string.Empty;
+                        _lastSelectedCard = null;
+                        try
+                        {
+                            webViewPreview.Source = new Uri("about:blank");
+                        }
+                        catch
+                        {
+                            // プレビューリセット失敗時は無視
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{Path.GetFileName(filePath)}: {ex.Message}");
+                }
+            }
+
+            bool needRefresh = deletedCount > 0;
+            bool directoryDeleted = false;
+            if (needRefresh && !string.IsNullOrWhiteSpace(_currentDirectory))
+            {
+                LoadImagesForDirectory(_currentDirectory);
+
+                // ディレクトリが空になったかチェック
+                bool directoryStillExists = Directory.Exists(_currentDirectory);
+                if (directoryStillExists)
+                {
+                    bool isEmpty = IsDirectoryEmpty(_currentDirectory);
+                    if (isEmpty)
+                    {
+                        try
+                        {
+                            Directory.Delete(_currentDirectory);
+                            directoryDeleted = true;
+
+                            // 親ディレクトリに移動
+                            string parentDir = Path.GetDirectoryName(_currentDirectory) ?? string.Empty;
+                            bool hasParent = !string.IsNullOrWhiteSpace(parentDir) && Directory.Exists(parentDir);
+                            if (hasParent)
+                            {
+                                LoadImagesForDirectory(parentDir);
+                                _currentDirectory = parentDir;
+                            }
+                            else
+                            {
+                                _currentDirectory = string.Empty;
+                            }
+
+                            // ツリーを更新
+                            bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
+                            if (hasRoot)
+                            {
+                                PopulateTree(_treeRootPath);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"ディレクトリ削除失敗: {ex.Message}");
+                        }
+                    }
+                }
+            }
+
+            // 結果を通知
+            string resultMessage = $"削除完了: {deletedCount} 件";
+            if (directoryDeleted)
+            {
+                resultMessage += "\nディレクトリも削除しました。";
+            }
+
+            bool hasErrors = errors.Count > 0;
+            if (hasErrors)
+            {
+                resultMessage += $"\n失敗: {errors.Count} 件\n" + string.Join("\n", errors.Take(10));
+            }
+
+            MessageBoxIcon icon = hasErrors ? MessageBoxIcon.Warning : MessageBoxIcon.Information;
+            MessageBox.Show(resultMessage, "削除", MessageBoxButtons.OK, icon);
+        }
+
+        private static bool IsDirectoryEmpty(string directoryPath)
+        {
+            bool hasPath = !string.IsNullOrWhiteSpace(directoryPath);
+            if (!hasPath)
+            {
+                return false;
+            }
+
+            bool exists = Directory.Exists(directoryPath);
+            if (!exists)
+            {
+                return false;
+            }
+
+            bool hasFiles = Directory.GetFiles(directoryPath).Length > 0;
+            if (hasFiles)
+            {
+                return false;
+            }
+
+            bool hasDirectories = Directory.GetDirectories(directoryPath).Length > 0;
+            if (hasDirectories)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private void menuDeleteDirectory_Click(object? sender, EventArgs e)
+        {
+            TreeNode? selectedNode = treDir.SelectedNode;
+            bool hasSelection = selectedNode != null;
+            if (!hasSelection)
+            {
+                MessageBox.Show("削除するディレクトリを選択してください。", "ディレクトリ削除", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string? directoryPath = selectedNode?.Tag as string;
+            bool hasPath = !string.IsNullOrWhiteSpace(directoryPath);
+            if (!hasPath)
+            {
+                MessageBox.Show("ディレクトリパスが取得できません。", "ディレクトリ削除", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            bool exists = Directory.Exists(directoryPath);
+            if (!exists)
+            {
+                MessageBox.Show("ディレクトリが存在しません。", "ディレクトリ削除", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 確認メッセージを表示
+            string directoryName = Path.GetFileName(directoryPath);
+            if (string.IsNullOrWhiteSpace(directoryName))
+            {
+                directoryName = directoryPath;
+            }
+
+            string message = $"ディレクトリ「{directoryName}」とその中のすべてのファイル・フォルダを削除します。\nよろしいですか？";
+            DialogResult confirmResult = MessageBox.Show(message, "ディレクトリ削除確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            bool canceled = confirmResult != DialogResult.Yes;
+            if (canceled)
+            {
+                return;
+            }
+
+            try
+            {
+                // ディレクトリを削除（再帰的）
+                Directory.Delete(directoryPath, recursive: true);
+
+                // 親ディレクトリに移動
+                string? parentDir = Path.GetDirectoryName(directoryPath);
+                bool hasParent = !string.IsNullOrWhiteSpace(parentDir) && Directory.Exists(parentDir);
+                if (hasParent)
+                {
+                    LoadImagesForDirectory(parentDir);
+                    _currentDirectory = parentDir;
+                }
+                else
+                {
+                    _currentDirectory = string.Empty;
+                    flowThumbs.Controls.Clear();
+                }
+
+                // ツリーを更新
+                bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
+                if (hasRoot)
+                {
+                    PopulateTree(_treeRootPath);
+                }
+
+                MessageBox.Show("ディレクトリを削除しました。", "ディレクトリ削除", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"ディレクトリの削除に失敗しました。\n{ex.Message}", "ディレクトリ削除エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private HashSet<string> SaveExpandedNodePaths()
+        {
+            HashSet<string> expandedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectExpandedPaths(treDir.Nodes, expandedPaths);
+            return expandedPaths;
+        }
+
+        private void CollectExpandedPaths(TreeNodeCollection nodes, HashSet<string> expandedPaths)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                bool isExpanded = node.IsExpanded;
+                if (isExpanded)
+                {
+                    string? path = node.Tag as string;
+                    bool hasPath = !string.IsNullOrWhiteSpace(path);
+                    if (hasPath && path != null)
+                    {
+                        expandedPaths.Add(path);
+                    }
+
+                    CollectExpandedPaths(node.Nodes, expandedPaths);
+                }
+            }
+        }
+
+        private void RestoreExpandedNodePaths(HashSet<string> expandedPaths)
+        {
+            bool hasPaths = expandedPaths.Count > 0;
+            if (!hasPaths)
+            {
+                return;
+            }
+
+            treDir.BeginUpdate();
+            try
+            {
+                ExpandNodesByPaths(treDir.Nodes, expandedPaths);
+            }
+            finally
+            {
+                treDir.EndUpdate();
+            }
+        }
+
+        private void ExpandNodesByPaths(TreeNodeCollection nodes, HashSet<string> expandedPaths)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                string? path = node.Tag as string;
+                bool shouldExpand = !string.IsNullOrWhiteSpace(path) && expandedPaths.Contains(path);
+                if (shouldExpand)
+                {
+                    LoadChildDirectories(node);
+                    node.Expand();
+                    ExpandNodesByPaths(node.Nodes, expandedPaths);
+                }
+            }
+        }
+
+        private void RestoreSelectedNode(string? selectedPath)
+        {
+            bool hasPath = !string.IsNullOrWhiteSpace(selectedPath);
+            if (!hasPath)
+            {
+                return;
+            }
+
+            TreeNode? nodeToSelect = FindNodeByPath(treDir.Nodes, selectedPath);
+            if (nodeToSelect != null)
+            {
+                treDir.SelectedNode = nodeToSelect;
+                nodeToSelect.EnsureVisible();
+            }
+        }
+
+        private TreeNode? FindNodeByPath(TreeNodeCollection nodes, string targetPath)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                string? nodePath = node.Tag as string;
+                bool isMatch = !string.IsNullOrWhiteSpace(nodePath) && string.Equals(nodePath, targetPath, StringComparison.OrdinalIgnoreCase);
+                if (isMatch)
+                {
+                    return node;
+                }
+
+                TreeNode? found = FindNodeByPath(node.Nodes, targetPath);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private void cbxPreview_CheckedChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
