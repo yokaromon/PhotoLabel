@@ -56,11 +56,17 @@ namespace PhotoLabel
             Item3 = new ComboBox();
             Item2 = new ComboBox();
             tabPage2 = new TabPage();
+            label5 = new Label();
+            label4 = new Label();
+            label3 = new Label();
+            label2 = new Label();
+            txtItem4 = new TextBox();
+            txtItem3 = new TextBox();
+            txtItem2 = new TextBox();
+            txtItem1 = new TextBox();
             label1 = new Label();
             txtTargetDir = new TextBox();
             btnSave = new Button();
-            txtItems = new TextBox();
-            cmbItems = new ComboBox();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
@@ -354,11 +360,17 @@ namespace PhotoLabel
             // 
             // tabPage2
             // 
+            tabPage2.Controls.Add(label5);
+            tabPage2.Controls.Add(label4);
+            tabPage2.Controls.Add(label3);
+            tabPage2.Controls.Add(label2);
+            tabPage2.Controls.Add(txtItem4);
+            tabPage2.Controls.Add(txtItem3);
+            tabPage2.Controls.Add(txtItem2);
+            tabPage2.Controls.Add(txtItem1);
             tabPage2.Controls.Add(label1);
             tabPage2.Controls.Add(txtTargetDir);
             tabPage2.Controls.Add(btnSave);
-            tabPage2.Controls.Add(txtItems);
-            tabPage2.Controls.Add(cmbItems);
             tabPage2.Location = new Point(8, 46);
             tabPage2.Name = "tabPage2";
             tabPage2.Padding = new Padding(3);
@@ -367,10 +379,78 @@ namespace PhotoLabel
             tabPage2.Text = "設定";
             tabPage2.UseVisualStyleBackColor = true;
             // 
+            // label5
+            // 
+            label5.AutoSize = true;
+            label5.Location = new Point(6, 354);
+            label5.Name = "label5";
+            label5.Size = new Size(75, 32);
+            label5.TabIndex = 12;
+            label5.Text = "Item4";
+            // 
+            // label4
+            // 
+            label4.AutoSize = true;
+            label4.Location = new Point(4, 240);
+            label4.Name = "label4";
+            label4.Size = new Size(75, 32);
+            label4.TabIndex = 11;
+            label4.Text = "Item3";
+            // 
+            // label3
+            // 
+            label3.AutoSize = true;
+            label3.Location = new Point(6, 137);
+            label3.Name = "label3";
+            label3.Size = new Size(75, 32);
+            label3.TabIndex = 10;
+            label3.Text = "Item2";
+            // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new Point(6, 34);
+            label2.Name = "label2";
+            label2.Size = new Size(75, 32);
+            label2.TabIndex = 9;
+            label2.Text = "Item1";
+            // 
+            // txtItem4
+            // 
+            txtItem4.Location = new Point(113, 351);
+            txtItem4.Multiline = true;
+            txtItem4.Name = "txtItem4";
+            txtItem4.Size = new Size(1536, 84);
+            txtItem4.TabIndex = 8;
+            // 
+            // txtItem3
+            // 
+            txtItem3.Location = new Point(113, 240);
+            txtItem3.Multiline = true;
+            txtItem3.Name = "txtItem3";
+            txtItem3.Size = new Size(1536, 84);
+            txtItem3.TabIndex = 7;
+            // 
+            // txtItem2
+            // 
+            txtItem2.Location = new Point(113, 134);
+            txtItem2.Multiline = true;
+            txtItem2.Name = "txtItem2";
+            txtItem2.Size = new Size(1536, 84);
+            txtItem2.TabIndex = 6;
+            // 
+            // txtItem1
+            // 
+            txtItem1.Location = new Point(113, 31);
+            txtItem1.Multiline = true;
+            txtItem1.Name = "txtItem1";
+            txtItem1.Size = new Size(1536, 84);
+            txtItem1.TabIndex = 5;
+            // 
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(62, 275);
+            label1.Location = new Point(62, 571);
             label1.Name = "label1";
             label1.Size = new Size(133, 32);
             label1.TabIndex = 4;
@@ -378,39 +458,20 @@ namespace PhotoLabel
             // 
             // txtTargetDir
             // 
-            txtTargetDir.Location = new Point(253, 272);
+            txtTargetDir.Location = new Point(253, 568);
             txtTargetDir.Name = "txtTargetDir";
             txtTargetDir.Size = new Size(1164, 39);
             txtTargetDir.TabIndex = 3;
             // 
             // btnSave
             // 
-            btnSave.Location = new Point(1267, 359);
+            btnSave.Location = new Point(1267, 655);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(150, 46);
             btnSave.TabIndex = 2;
             btnSave.Text = "保存";
             btnSave.UseVisualStyleBackColor = true;
             btnSave.Click += btnSave_Click;
-            // 
-            // txtItems
-            // 
-            txtItems.Location = new Point(62, 116);
-            txtItems.Multiline = true;
-            txtItems.Name = "txtItems";
-            txtItems.Size = new Size(1355, 102);
-            txtItems.TabIndex = 1;
-            // 
-            // cmbItems
-            // 
-            cmbItems.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbItems.FormattingEnabled = true;
-            cmbItems.Items.AddRange(new object[] { "Item1", "Item2", "Item3", "Item4" });
-            cmbItems.Location = new Point(61, 50);
-            cmbItems.Name = "cmbItems";
-            cmbItems.Size = new Size(242, 40);
-            cmbItems.TabIndex = 0;
-            cmbItems.SelectedIndexChanged += cmbItems_SelectedIndexChanged;
             // 
             // FrmMain
             // 
@@ -467,10 +528,8 @@ namespace PhotoLabel
         private WebView2 webViewPreview;
         private TextBox txtOcr;
         private Panel pnlControl;
-        private TextBox txtItems;
         private ComboBox comboBox1;
         private Button btnSave;
-        private ComboBox cmbItems;
         private Label label1;
         private TextBox txtTargetDir;
         private Button btnRename;
@@ -484,5 +543,13 @@ namespace PhotoLabel
         private Button btnDelete;
         private ContextMenuStrip treeContextMenu;
         private ToolStripMenuItem menuDeleteDirectory;
+        private Label label5;
+        private Label label4;
+        private Label label3;
+        private Label label2;
+        private TextBox txtItem4;
+        private TextBox txtItem3;
+        private TextBox txtItem2;
+        private TextBox txtItem1;
     }
 }

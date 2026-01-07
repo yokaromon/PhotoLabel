@@ -40,6 +40,9 @@ namespace PhotoLabel
         private enum SortOrder { Date, Name }
         private SortOrder _currentSortOrder = SortOrder.Date;
         private FrmPicture? _pictureForm;
+        private bool _isTreeDragPending;
+        private Point _treeDragStartPoint;
+        private TreeNode? _treeDragNode;
 
         public FrmMain()
         {
@@ -48,6 +51,9 @@ namespace PhotoLabel
             FormClosing += FrmMain_FormClosing;
             treDir.BeforeExpand += TreDir_BeforeExpand;
             treDir.AfterSelect += TreDir_AfterSelect;
+            treDir.MouseDown += TreDir_MouseDown;
+            treDir.MouseMove += TreDir_MouseMove;
+            treDir.MouseUp += TreDir_MouseUp;
             splitContainer2.SizeChanged += (_, _) => AdjustPaneWidthToCard();
             Resize += (_, _) => AdjustPaneWidthToCard();
             flowThumbs.ControlAdded += (_, _) => AdjustPaneWidthToCard();
@@ -95,10 +101,6 @@ namespace PhotoLabel
 
                 InitializeOcrServices(configPath);
                 LoadItemsFromConfig(configPath);
-                if (cmbItems.Items.Count > 0)
-                {
-                    cmbItems.SelectedIndex = 0;
-                }
 
                 if (cmbSort.Items.Count > 0)
                 {
@@ -203,7 +205,7 @@ namespace PhotoLabel
             try
             {
                 var dict = new Tools.ParameterDict(configPath);
-                LoadItemList(dict);
+                LoadItemTextBoxes(dict);
                 LoadItemCombos(dict);
             }
             catch
@@ -212,22 +214,12 @@ namespace PhotoLabel
             }
         }
 
-        private void LoadItemList(Tools.ParameterDict dict)
+        private void LoadItemTextBoxes(Tools.ParameterDict dict)
         {
-            var keys = dict.GetKeyArray("Items");
-            if (keys == null || keys.Length == 0)
-            {
-                return;
-            }
-
-            cmbItems.Items.Clear();
-            foreach (var key in keys)
-            {
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    cmbItems.Items.Add(key);
-                }
-            }
+            txtItem1.Text = dict.GetValue("Items", "Item1", string.Empty) ?? string.Empty;
+            txtItem2.Text = dict.GetValue("Items", "Item2", string.Empty) ?? string.Empty;
+            txtItem3.Text = dict.GetValue("Items", "Item3", string.Empty) ?? string.Empty;
+            txtItem4.Text = dict.GetValue("Items", "Item4", string.Empty) ?? string.Empty;
         }
 
         private void LoadItemCombos(Tools.ParameterDict dict)
@@ -275,24 +267,6 @@ namespace PhotoLabel
             }
         }
 
-        private void UpdateItemPreview()
-        {
-            var key = cmbItems.SelectedItem as string ?? cmbItems.Text;
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                txtItems.Text = string.Empty;
-                return;
-            }
-            try
-            {
-                var dict = new Tools.ParameterDict(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName));
-                txtItems.Text = dict.GetValue("Items", key, string.Empty) ?? string.Empty;
-            }
-            catch
-            {
-                txtItems.Text = string.Empty;
-            }
-        }
 
         private static string? ReadTargetDir(string configPath)
         {
@@ -1210,26 +1184,17 @@ namespace PhotoLabel
             }
         }
 
-        private void cmbItems_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            UpdateItemPreview();
-        }
-
         private void btnSave_Click(object sender, EventArgs e)
         {
-            var key = cmbItems.SelectedItem as string ?? cmbItems.Text;
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                MessageBox.Show("保存する項目を選択してください。", "Save", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
             var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName);
             try
             {
                 var itemValues = new Dictionary<string, string>
                 {
-                    { key, txtItems.Text ?? string.Empty }
+                    { "Item1", txtItem1.Text ?? string.Empty },
+                    { "Item2", txtItem2.Text ?? string.Empty },
+                    { "Item3", txtItem3.Text ?? string.Empty },
+                    { "Item4", txtItem4.Text ?? string.Empty }
                 };
                 Tools.ParameterDict.SaveValues("Items", itemValues, configPath);
 
@@ -1242,9 +1207,8 @@ namespace PhotoLabel
                     Tools.ParameterDict.SaveValues("Config", targetDirValue, configPath);
                 }
 
-                // reload combos and preview after save
+                // reload combos and textboxes after save
                 LoadItemsFromConfig(configPath);
-                UpdateItemPreview();
 
                 MessageBox.Show("保存しました。", "Save", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -2546,6 +2510,134 @@ namespace PhotoLabel
         private void cbxPreview_CheckedChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void TreDir_MouseDown(object? sender, MouseEventArgs e)
+        {
+            bool isLeftButton = e.Button == MouseButtons.Left;
+            if (!isLeftButton)
+            {
+                return;
+            }
+
+            TreeNode? nodeAtPoint = treDir.GetNodeAt(e.Location);
+            bool hasNode = nodeAtPoint != null;
+            if (!hasNode)
+            {
+                return;
+            }
+
+            treDir.SelectedNode = nodeAtPoint;
+            _isTreeDragPending = true;
+            _treeDragStartPoint = e.Location;
+            _treeDragNode = nodeAtPoint;
+        }
+
+        private void TreDir_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (!_isTreeDragPending)
+            {
+                return;
+            }
+
+            bool hasNode = _treeDragNode != null;
+            if (!hasNode)
+            {
+                ResetTreeDragState();
+                return;
+            }
+
+            bool leftPressed = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
+            if (!leftPressed)
+            {
+                ResetTreeDragState();
+                return;
+            }
+
+            Point currentScreenPoint = treDir.PointToScreen(e.Location);
+            Point startScreenPoint = treDir.PointToScreen(_treeDragStartPoint);
+            bool movedEnough = HasExceededDragThreshold(startScreenPoint, currentScreenPoint);
+            if (!movedEnough)
+            {
+                return;
+            }
+
+            List<string> files = GetFilesFromTreeNode(_treeDragNode);
+            bool hasFiles = files.Count > 0;
+            if (!hasFiles)
+            {
+                ResetTreeDragState();
+                return;
+            }
+
+            BeginTreeNodeDrag(files);
+        }
+
+        private void TreDir_MouseUp(object? sender, MouseEventArgs e)
+        {
+            bool isLeftButton = e.Button == MouseButtons.Left;
+            if (!isLeftButton)
+            {
+                return;
+            }
+
+            ResetTreeDragState();
+        }
+
+        private List<string> GetFilesFromTreeNode(TreeNode? node)
+        {
+            List<string> files = new List<string>();
+            if (node?.Tag is not string directoryPath)
+            {
+                return files;
+            }
+
+            bool directoryExists = Directory.Exists(directoryPath);
+            if (!directoryExists)
+            {
+                return files;
+            }
+
+            try
+            {
+                var extensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".heic", ".heif" };
+                string[] allFiles = Directory.GetFiles(directoryPath);
+                foreach (string filePath in allFiles)
+                {
+                    string ext = Path.GetExtension(filePath);
+                    bool isImage = extensions.Any(x => ext.Equals(x, StringComparison.OrdinalIgnoreCase));
+                    if (isImage)
+                    {
+                        files.Add(filePath);
+                    }
+                }
+            }
+            catch
+            {
+                // ディレクトリ読み込みエラーは無視
+            }
+
+            return files;
+        }
+
+        private void BeginTreeNodeDrag(List<string> filePaths)
+        {
+            DataObject dataObject = new DataObject();
+            StringCollection dropList = new StringCollection();
+            string[] fileArray = filePaths.ToArray();
+            dropList.AddRange(fileArray);
+            dataObject.SetFileDropList(dropList);
+            dataObject.SetData(InternalDragFormat, true);
+
+            DragDropEffects allowedEffects = DragDropEffects.Copy | DragDropEffects.Move;
+            treDir.DoDragDrop(dataObject, allowedEffects);
+            ResetTreeDragState();
+        }
+
+        private void ResetTreeDragState()
+        {
+            _isTreeDragPending = false;
+            _treeDragNode = null;
         }
     }
 }

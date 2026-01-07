@@ -57,10 +57,10 @@ namespace PhotoLabel
             lblDate.Click += BubbleClick;
             lblSize.Click += BubbleClick;
             SetSelectionHighlight(chkSelect.Checked);
-            // picBoxに対してはMouseイベント転送を行わない（DoubleClickを妨げるため）
-            AttachChildMouseForwarders(lblName);
-            AttachChildMouseForwarders(lblDate);
-            AttachChildMouseForwarders(lblSize);
+            // picBoxとラベルに対してはMouseイベント転送を行わない（DoubleClickを妨げるため）
+            // AttachChildMouseForwarders(lblName);
+            // AttachChildMouseForwarders(lblDate);
+            // AttachChildMouseForwarders(lblSize);
 
             LoadMetadata(filePath);
         }
