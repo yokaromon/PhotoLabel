@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -39,7 +40,7 @@ namespace Tools
             string aFormat,
             params object[] aParams)
         {
-            return LogManager.Log( aFormat.ExFormat( aParams) );
+            return LogManager.Log( $"{ aParams}");
         }
 
         public static int Log(
@@ -47,7 +48,7 @@ namespace Tools
             string aFormat,
             params object[] aParams)
         {
-            return LogManager.Log(aL.Info(), aFormat, aParams);
+            return LogManager.Log(aL.ToString(), aFormat, aParams);
         }
 
 
@@ -56,7 +57,7 @@ namespace Tools
             Exception aEx
         )
         {
-            return LogManager.Log("{0}{1}", aL.Info(),  aEx.StackTrace);
+            return LogManager.Log("{0}{1}", aL.ToString(),  aEx.StackTrace);
         }
 
 
@@ -93,7 +94,7 @@ namespace Tools
                 if (readSize == 0)
                     break;
                 //部分的に読み込んだデータを使用したコードをここに記述する
-                tb.Text += System.Text.Encoding.UTF8.GetString(bs);
+                tb.Text += System.Text.Encoding.GetEncoding(65001).GetString(bs);
             }
             //カーソルを行末に移動して、スクロールさせる
             tb.SelectionStart = tb.Text.Length;
@@ -119,25 +120,25 @@ namespace Tools
             fsw.Dispose();
         }
     }
-    public class L
-    {
-        public int mLine;
-        public string mPath;
-        public L(
-            [CallerLineNumber] int aLine = 0,
-            [CallerFilePath] string aPath = ""
-        )
-        {
-            mPath = aPath;
-            mLine = aLine;
-        }
-        public string Info()
-        {
-            string info = "";
-            info = string.Format("{0}:({1})", mPath, mLine);
-            return info;
-        }
-    }
+//    public class L
+//    {
+//        public int mLine;
+//        public string mPath;
+//        public L(
+//            [CallerLineNumber] int aLine = 0,
+//            [CallerFilePath] string aPath = ""
+//        )
+//        {
+//            mPath = aPath;
+//            mLine = aLine;
+//        }
+//        public string ToString()
+//        {
+//            string info = "";
+//            info = string.Format("{0}:({1})", mPath, mLine);
+//            return info;
+//        }
+//    }
 
     public class ExFileWatcher : FileSystemWatcher
     {
@@ -203,8 +204,13 @@ namespace Tools
             }
         }
 
-        public static void Init( string aLogDir, int aMaxDate = 10)
+        public static void Init( string aLogDir = null, int aMaxDate = 10)
         {
+            if( aLogDir == null )
+            {
+                aLogDir = Path.GetTempPath();
+            }
+
             if (sLogManager != null)
             {
                 // 初期化が2回動くのはおかしい
@@ -325,17 +331,24 @@ namespace Tools
             /// ttps://ucolonyen.blogspot.com/2013/08/clinq.html
             ///
 
-            int startPos = 3;   // 日付文字列が開始する位置."Log","Err"ともに3文字のためファイル名の4文字目から日付文字列となっている
-            string dateForm = "yyyyMMdd";   // 日付文字列の書式を指定
-            DateTime target = DateTime.Today.AddDays(-mMaxDate);
+            try
+            {
 
-            System.IO.Directory.GetFiles(mLogDir)
-              .Where(f => DateTime.ParseExact(
-                System.IO.Path.GetFileName(f).Substring(startPos, dateForm.Length),
-                dateForm,
-                System.Globalization.DateTimeFormatInfo.InvariantInfo) < target)
-              .ToList()
-              .ForEach(f => System.IO.File.Delete(f));
+                int startPos = 3;   // 日付文字列が開始する位置."Log","Err"ともに3文字のためファイル名の4文字目から日付文字列となっている
+                string dateForm = "yyyyMMdd";   // 日付文字列の書式を指定
+                DateTime target = DateTime.Today.AddDays(-mMaxDate);
+
+                System.IO.Directory.GetFiles(mLogDir)
+                  .Where(f => DateTime.ParseExact(
+                    System.IO.Path.GetFileName(f).Substring(startPos, dateForm.Length),
+                    dateForm,
+                    System.Globalization.DateTimeFormatInfo.InvariantInfo) < target)
+                  .ToList()
+                  .ForEach(f => System.IO.File.Delete(f));
+            }catch( Exception )
+            {
+
+            }
 
         }
 
@@ -371,6 +384,7 @@ namespace Tools
             {
                 StringBuilder logText = new StringBuilder(String.Format(aFormat, aParams));
                 logText.Insert(0, GetCurrentTime("HH:mm:ss.fff "));
+                Console.WriteLine(logText);
                 if (sLogManager.mLogDir == "")
                 {
                     return 0;
@@ -392,7 +406,7 @@ namespace Tools
         /// <param name="aFormat">ログのフォーマット</param>
         /// <param name="aParams">出力パラメータ</param>
         /// <returns></returns>
-        /// 
+        ///
         public static int Err(L aL, string aFormat, params object[] aParams)
         {
             lock (sLogManager)
@@ -404,7 +418,7 @@ namespace Tools
                     return 0;
                 }
                 sLogManager.mLastText = logText.ToString();
-                logText.Insert(0, GetCurrentTime("HH:mm:ss.fff ") + aL.Info());
+                logText.Insert(0, GetCurrentTime("HH:mm:ss.fff ") + aL.ToString());
                 // Errファイルに出力する
                 System.IO.StreamWriter writer = new System.IO.StreamWriter(sLogManager.ErrorLogFileName, true);
                 writer.WriteLine(logText);

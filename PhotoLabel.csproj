@@ -9,6 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="skills\**" />
+    <Compile Remove="setup\**" />
+    <EmbeddedResource Remove="skills\**" />
+    <EmbeddedResource Remove="setup\**" />
+    <EmbeddedResource Remove=".git\**" />
+    <None Remove="skills\**" />
+    <None Remove="setup\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="Config.ini">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

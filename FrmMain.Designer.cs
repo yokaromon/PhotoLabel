@@ -36,6 +36,7 @@ namespace PhotoLabel
             panel2 = new Panel();
             treDir = new TreeView();
             treeContextMenu = new ContextMenuStrip(components);
+            menuOpenExplorer = new ToolStripMenuItem();
             menuDeleteDirectory = new ToolStripMenuItem();
             panel1 = new Panel();
             txtFind = new TextBox();
@@ -56,6 +57,7 @@ namespace PhotoLabel
             Item3 = new ComboBox();
             Item2 = new ComboBox();
             tabPage2 = new TabPage();
+            textBox1 = new TextBox();
             label5 = new Label();
             label4 = new Label();
             label3 = new Label();
@@ -67,6 +69,8 @@ namespace PhotoLabel
             label1 = new Label();
             txtTargetDir = new TextBox();
             btnSave = new Button();
+            contextMenuStrip1 = new ContextMenuStrip(components);
+            txtReplace = new TextBox();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
@@ -152,14 +156,21 @@ namespace PhotoLabel
             // treeContextMenu
             // 
             treeContextMenu.ImageScalingSize = new Size(32, 32);
-            treeContextMenu.Items.AddRange(new ToolStripItem[] { menuDeleteDirectory });
+            treeContextMenu.Items.AddRange(new ToolStripItem[] { menuOpenExplorer, menuDeleteDirectory });
             treeContextMenu.Name = "treeContextMenu";
-            treeContextMenu.Size = new Size(137, 42);
+            treeContextMenu.Size = new Size(175, 80);
+            // 
+            // menuOpenExplorer
+            // 
+            menuOpenExplorer.Name = "menuOpenExplorer";
+            menuOpenExplorer.Size = new Size(174, 38);
+            menuOpenExplorer.Text = "Explorer";
+            menuOpenExplorer.Click += menuOpenExplorer_Click;
             // 
             // menuDeleteDirectory
             // 
             menuDeleteDirectory.Name = "menuDeleteDirectory";
-            menuDeleteDirectory.Size = new Size(136, 38);
+            menuDeleteDirectory.Size = new Size(174, 38);
             menuDeleteDirectory.Text = "削除";
             menuDeleteDirectory.Click += menuDeleteDirectory_Click;
             // 
@@ -333,6 +344,7 @@ namespace PhotoLabel
             Item1.Name = "Item1";
             Item1.Size = new Size(327, 39);
             Item1.TabIndex = 4;
+            Item1.Leave += Item_ValueChanged;
             // 
             // Item4
             // 
@@ -341,6 +353,7 @@ namespace PhotoLabel
             Item4.Name = "Item4";
             Item4.Size = new Size(332, 40);
             Item4.TabIndex = 3;
+            Item4.SelectedIndexChanged += Item_ValueChanged;
             // 
             // Item3
             // 
@@ -349,6 +362,7 @@ namespace PhotoLabel
             Item3.Name = "Item3";
             Item3.Size = new Size(324, 40);
             Item3.TabIndex = 2;
+            Item3.SelectedIndexChanged += Item_ValueChanged;
             // 
             // Item2
             // 
@@ -357,9 +371,12 @@ namespace PhotoLabel
             Item2.Name = "Item2";
             Item2.Size = new Size(332, 40);
             Item2.TabIndex = 1;
+            Item2.SelectedIndexChanged += Item_ValueChanged;
             // 
             // tabPage2
             // 
+            tabPage2.Controls.Add(txtReplace);
+            tabPage2.Controls.Add(textBox1);
             tabPage2.Controls.Add(label5);
             tabPage2.Controls.Add(label4);
             tabPage2.Controls.Add(label3);
@@ -379,10 +396,17 @@ namespace PhotoLabel
             tabPage2.Text = "設定";
             tabPage2.UseVisualStyleBackColor = true;
             // 
+            // textBox1
+            // 
+            textBox1.Location = new Point(0, 0);
+            textBox1.Name = "textBox1";
+            textBox1.Size = new Size(200, 39);
+            textBox1.TabIndex = 13;
+            // 
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(6, 354);
+            label5.Location = new Point(9, 401);
             label5.Name = "label5";
             label5.Size = new Size(75, 32);
             label5.TabIndex = 12;
@@ -391,7 +415,7 @@ namespace PhotoLabel
             // label4
             // 
             label4.AutoSize = true;
-            label4.Location = new Point(4, 240);
+            label4.Location = new Point(7, 287);
             label4.Name = "label4";
             label4.Size = new Size(75, 32);
             label4.TabIndex = 11;
@@ -400,7 +424,7 @@ namespace PhotoLabel
             // label3
             // 
             label3.AutoSize = true;
-            label3.Location = new Point(6, 137);
+            label3.Location = new Point(9, 184);
             label3.Name = "label3";
             label3.Size = new Size(75, 32);
             label3.TabIndex = 10;
@@ -409,7 +433,7 @@ namespace PhotoLabel
             // label2
             // 
             label2.AutoSize = true;
-            label2.Location = new Point(6, 34);
+            label2.Location = new Point(9, 81);
             label2.Name = "label2";
             label2.Size = new Size(75, 32);
             label2.TabIndex = 9;
@@ -417,7 +441,7 @@ namespace PhotoLabel
             // 
             // txtItem4
             // 
-            txtItem4.Location = new Point(113, 351);
+            txtItem4.Location = new Point(116, 398);
             txtItem4.Multiline = true;
             txtItem4.Name = "txtItem4";
             txtItem4.Size = new Size(1536, 84);
@@ -425,7 +449,7 @@ namespace PhotoLabel
             // 
             // txtItem3
             // 
-            txtItem3.Location = new Point(113, 240);
+            txtItem3.Location = new Point(116, 287);
             txtItem3.Multiline = true;
             txtItem3.Name = "txtItem3";
             txtItem3.Size = new Size(1536, 84);
@@ -433,7 +457,7 @@ namespace PhotoLabel
             // 
             // txtItem2
             // 
-            txtItem2.Location = new Point(113, 134);
+            txtItem2.Location = new Point(116, 181);
             txtItem2.Multiline = true;
             txtItem2.Name = "txtItem2";
             txtItem2.Size = new Size(1536, 84);
@@ -441,7 +465,7 @@ namespace PhotoLabel
             // 
             // txtItem1
             // 
-            txtItem1.Location = new Point(113, 31);
+            txtItem1.Location = new Point(116, 78);
             txtItem1.Multiline = true;
             txtItem1.Name = "txtItem1";
             txtItem1.Size = new Size(1536, 84);
@@ -450,7 +474,7 @@ namespace PhotoLabel
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(62, 571);
+            label1.Location = new Point(9, 510);
             label1.Name = "label1";
             label1.Size = new Size(133, 32);
             label1.TabIndex = 4;
@@ -458,20 +482,35 @@ namespace PhotoLabel
             // 
             // txtTargetDir
             // 
-            txtTargetDir.Location = new Point(253, 568);
+            txtTargetDir.Location = new Point(165, 507);
             txtTargetDir.Name = "txtTargetDir";
             txtTargetDir.Size = new Size(1164, 39);
             txtTargetDir.TabIndex = 3;
             // 
             // btnSave
             // 
-            btnSave.Location = new Point(1267, 655);
+            btnSave.Location = new Point(1503, 23);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(150, 46);
             btnSave.TabIndex = 2;
             btnSave.Text = "保存";
             btnSave.UseVisualStyleBackColor = true;
             btnSave.Click += btnSave_Click;
+            // 
+            // contextMenuStrip1
+            // 
+            contextMenuStrip1.ImageScalingSize = new Size(32, 32);
+            contextMenuStrip1.Name = "contextMenuStrip1";
+            contextMenuStrip1.Size = new Size(61, 4);
+            // 
+            // txtReplace
+            // 
+            txtReplace.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            txtReplace.Location = new Point(9, 602);
+            txtReplace.Multiline = true;
+            txtReplace.Name = "txtReplace";
+            txtReplace.Size = new Size(1737, 142);
+            txtReplace.TabIndex = 14;
             // 
             // FrmMain
             // 
@@ -542,6 +581,7 @@ namespace PhotoLabel
         private Panel panel1;
         private Button btnDelete;
         private ContextMenuStrip treeContextMenu;
+        private ToolStripMenuItem menuOpenExplorer;
         private ToolStripMenuItem menuDeleteDirectory;
         private Label label5;
         private Label label4;
@@ -551,5 +591,8 @@ namespace PhotoLabel
         private TextBox txtItem3;
         private TextBox txtItem2;
         private TextBox txtItem1;
+        private TextBox textBox1;
+        private TextBox txtReplace;
+        private ContextMenuStrip contextMenuStrip1;
     }
 }

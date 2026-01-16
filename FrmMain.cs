@@ -23,6 +23,7 @@ namespace PhotoLabel
         private const int WIDTH = 800;
         private Task? _webViewInitTask;
         private bool _suppressBulkOcr;
+        private bool _suppressItemRename;
         private string _currentDirectory = string.Empty;
         private const string DefaultRenamePattern = "{Item1}_{Item2}_{Item3}_{Item4}{Ext}";
         private readonly Dictionary<string, ItemSnapshot> _itemSnapshots = new();
@@ -101,6 +102,7 @@ namespace PhotoLabel
 
                 InitializeOcrServices(configPath);
                 LoadItemsFromConfig(configPath);
+                LoadReplaceFile();
 
                 if (cmbSort.Items.Count > 0)
                 {
@@ -211,6 +213,41 @@ namespace PhotoLabel
             catch
             {
                 // ignore load errors
+            }
+        }
+
+        private const string ReplaceFileName = "置換.csv";
+
+        private void LoadReplaceFile()
+        {
+            try
+            {
+                string replacePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ReplaceFileName);
+                bool exists = File.Exists(replacePath);
+                if (!exists)
+                {
+                    txtReplace.Text = string.Empty;
+                    return;
+                }
+
+                txtReplace.Text = File.ReadAllText(replacePath);
+            }
+            catch
+            {
+                txtReplace.Text = string.Empty;
+            }
+        }
+
+        private void SaveReplaceFile()
+        {
+            try
+            {
+                string replacePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ReplaceFileName);
+                File.WriteAllText(replacePath, txtReplace.Text ?? string.Empty);
+            }
+            catch
+            {
+                // 保存エラーは無視
             }
         }
 
@@ -542,7 +579,6 @@ namespace PhotoLabel
             try
             {
                 ClearAllSelections();
-                _lastSelectedCard = null;
                 flowThumbs.Controls.Clear();
 
                 string? previousGroup = null;
@@ -587,7 +623,7 @@ namespace PhotoLabel
 
         private void WireCardEvents(ThumbnailCard card)
         {
-            card.Click += (_, _) => HandleCardClick(card, card.FilePath);
+            card.Click += (_, _) => HandleCardClick(card);
             card.ImageDoubleClick += (sender, _) =>
             {
                 if (sender is ThumbnailCard c)
@@ -595,17 +631,7 @@ namespace PhotoLabel
                     HandleCardDoubleClick(c.FilePath);
                 }
             };
-            card.SelectionCheckBox.Click += (_, _) => SelectAndPreview(card, card.FilePath);
-            card.SelectionCheckBox.CheckedChanged += (_, _) =>
-            {
-                if (_suppressBulkOcr)
-                {
-                    return;
-                }
-
-                string path = card.FilePath;
-                _ = RunOcrAsync(path);
-            };
+            card.SelectionCheckBox.Click += (_, _) => HandleSelectionCheckClick(card);
             card.RenameRequested += Card_RenameRequested;
             card.MouseDown += Card_MouseDown;
             card.MouseMove += Card_MouseMove;
@@ -701,62 +727,183 @@ namespace PhotoLabel
             }
         }
 
-        private void SelectAndPreview(ThumbnailCard card, string filePath)
+        private void HandleSelectionCheckClick(ThumbnailCard card)
         {
-            bool isAlreadySelected = _selectedCards.Contains(card);
-            if (!isAlreadySelected)
+            // チェックボックス操作に合わせて選択とカーソルを同期する
+            bool isChecked = card.SelectionCheckBox.Checked;
+            if (isChecked)
             {
-                ClearAllSelections();
                 AddToSelection(card);
+                SetCursorCard(card, true);
+                return;
+            }
+
+            RemoveFromSelection(card);
+
+            bool hasSelection = _selectedCards.Count > 0;
+            if (!hasSelection)
+            {
+                ClearCursorCard();
+                return;
+            }
+
+            bool wasCursor = _lastSelectedCard == card;
+            if (!wasCursor)
+            {
+                return;
+            }
+
+            ThumbnailCard? fallback = GetLastSelectedInDisplayOrder();
+            SetCursorCard(fallback, true);
+        }
+
+        private void SetCursorCard(ThumbnailCard? card, bool updatePreview)
+        {
+            // カーソル枠線の更新とプレビュー表示をまとめて行う
+            ThumbnailCard? previousCard = _lastSelectedCard;
+            bool isSame = previousCard == card;
+            if (!isSame && previousCard != null)
+            {
+                previousCard.SetCursorHighlight(false);
             }
 
             _lastSelectedCard = card;
+            if (card == null)
+            {
+                return;
+            }
+
+            card.SetCursorHighlight(true);
+
+            if (!updatePreview)
+            {
+                return;
+            }
+
+            string filePath = card.FilePath;
             _ = ShowPreviewAsync(filePath);
+        }
+
+        private void ClearCursorCard()
+        {
+            // カーソル表示のみを解除する
+            SetCursorCard(null, false);
+        }
+
+        private ThumbnailCard? GetLastSelectedInDisplayOrder()
+        {
+            // 表示順の最後にある選択カードを取得する
+            ThumbnailCard? lastSelected = null;
+            foreach (Control control in flowThumbs.Controls)
+            {
+                ThumbnailCard? card = control as ThumbnailCard;
+                bool isCard = card != null;
+                if (!isCard)
+                {
+                    continue;
+                }
+
+                bool isSelected = _selectedCards.Contains(card);
+                if (!isSelected)
+                {
+                    continue;
+                }
+
+                lastSelected = card;
+            }
+
+            return lastSelected;
         }
 
         private void AddToSelection(ThumbnailCard card)
         {
             bool wasAdded = _selectedCards.Add(card);
-            if (wasAdded)
+            if (!wasAdded)
             {
+                return;
+            }
+
+            // 選択状態はチェックと背景に同期する
+            bool previousSuppress = _suppressBulkOcr;
+            try
+            {
+                _suppressBulkOcr = true;
                 card.SetSelected(true);
+            }
+            finally
+            {
+                _suppressBulkOcr = previousSuppress;
             }
         }
 
         private void RemoveFromSelection(ThumbnailCard card)
         {
             bool wasRemoved = _selectedCards.Remove(card);
-            if (wasRemoved)
+            if (!wasRemoved)
             {
+                return;
+            }
+
+            // 選択解除もチェック状態と同期する
+            bool previousSuppress = _suppressBulkOcr;
+            try
+            {
+                _suppressBulkOcr = true;
                 card.SetSelected(false);
+            }
+            finally
+            {
+                _suppressBulkOcr = previousSuppress;
             }
         }
 
-        private void ToggleSelection(ThumbnailCard card)
+        private void ToggleSelection(ThumbnailCard card, bool updatePreview)
         {
             bool isCurrentlySelected = _selectedCards.Contains(card);
             if (isCurrentlySelected)
             {
                 RemoveFromSelection(card);
-                bool noCardsLeft = _selectedCards.Count == 0;
-                if (noCardsLeft)
+                bool hasSelection = _selectedCards.Count > 0;
+                if (!hasSelection)
                 {
-                    _lastSelectedCard = null;
+                    ClearCursorCard();
+                    return;
                 }
+
+                bool wasCursor = _lastSelectedCard == card;
+                if (!wasCursor)
+                {
+                    return;
+                }
+
+                ThumbnailCard? fallback = GetLastSelectedInDisplayOrder();
+                SetCursorCard(fallback, updatePreview);
+                return;
             }
-            else
-            {
-                AddToSelection(card);
-            }
+
+            AddToSelection(card);
+            SetCursorCard(card, updatePreview);
         }
 
         private void ClearAllSelections()
         {
-            foreach (var card in _selectedCards.ToList())
+            // まとめて解除するためOCRは抑止する
+            bool previousSuppress = _suppressBulkOcr;
+            try
             {
-                card.SetSelected(false);
+                _suppressBulkOcr = true;
+                ClearCursorCard();
+                List<ThumbnailCard> cards = _selectedCards.ToList();
+                foreach (ThumbnailCard card in cards)
+                {
+                    card.SetSelected(false);
+                }
+                _selectedCards.Clear();
             }
-            _selectedCards.Clear();
+            finally
+            {
+                _suppressBulkOcr = previousSuppress;
+            }
         }
 
         private int GetCardIndex(ThumbnailCard card)
@@ -802,27 +949,30 @@ namespace PhotoLabel
             }
         }
 
-        private void HandleCardClick(ThumbnailCard card, string filePath)
+        private void HandleCardClick(ThumbnailCard card)
         {
+            // クリック選択はチェック状態とカーソル表示を同期する
             bool ctrlPressed = (Control.ModifierKeys & Keys.Control) == Keys.Control;
             bool shiftPressed = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
 
-            if (shiftPressed && _lastSelectedCard != null)
+            ThumbnailCard? anchor = _lastSelectedCard;
+            bool hasAnchor = anchor != null;
+            if (shiftPressed && hasAnchor)
             {
-                SelectRange(_lastSelectedCard, card);
-            }
-            else if (ctrlPressed)
-            {
-                ToggleSelection(card);
-            }
-            else
-            {
-                ClearAllSelections();
-                AddToSelection(card);
+                SelectRange(anchor!, card);
+                SetCursorCard(card, true);
+                return;
             }
 
-            _lastSelectedCard = card;
-            _ = ShowPreviewAsync(filePath);
+            if (ctrlPressed)
+            {
+                ToggleSelection(card, true);
+                return;
+            }
+
+            ClearAllSelections();
+            AddToSelection(card);
+            SetCursorCard(card, true);
         }
 
         private int GetCardWidth()
@@ -881,10 +1031,54 @@ namespace PhotoLabel
                 MessageBox.Show($"Failed to load preview.{Environment.NewLine}{ex.Message}", "Preview Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
+            // スナップショットがあれば復元、なければファイル名を分解して設定
+            ApplyItemsFromSnapshotOrFileName(filePath);
+
             _ = RunOcrAsync(filePath);
 
             // FrmPictureが開いている場合は画像を更新
             UpdatePictureForm(filePath);
+        }
+
+        private void ApplyItemsFromSnapshotOrFileName(string filePath)
+        {
+            try
+            {
+                _suppressItemRename = true;
+
+                bool hasSnapshot = _itemSnapshots.TryGetValue(filePath, out var snapshot);
+                if (hasSnapshot && snapshot != null)
+                {
+                    Item1.Text = snapshot.Item1;
+                    Item2.Text = snapshot.Item2;
+                    Item3.Text = snapshot.Item3;
+                    Item4.Text = snapshot.Item4;
+                    return;
+                }
+
+                // スナップショットがない場合、ファイル名を分解して設定
+                string fileName = Path.GetFileNameWithoutExtension(filePath);
+                bool hasFileName = !string.IsNullOrWhiteSpace(fileName);
+                if (!hasFileName)
+                {
+                    Item1.Text = string.Empty;
+                    Item2.Text = string.Empty;
+                    Item3.Text = string.Empty;
+                    Item4.Text = string.Empty;
+                    return;
+                }
+
+                // ファイル名を「_」で分割してItem1〜4に設定
+                string[] parts = fileName.Split('_');
+                Item1.Text = parts.Length > 0 ? parts[0] : string.Empty;
+                Item2.Text = parts.Length > 1 ? parts[1] : string.Empty;
+                Item3.Text = parts.Length > 2 ? parts[2] : string.Empty;
+                Item4.Text = parts.Length > 3 ? parts[3] : string.Empty;
+            }
+            finally
+            {
+                _suppressItemRename = false;
+            }
         }
 
         private void HandleCardDoubleClick(string filePath)
@@ -1022,6 +1216,53 @@ namespace PhotoLabel
             return cachedAfterManual;
         }
 
+        private string ApplyReplaceRules(string text)
+        {
+            string rules = txtReplace.Text ?? string.Empty;
+            bool hasRules = !string.IsNullOrWhiteSpace(rules);
+            if (!hasRules)
+            {
+                return text;
+            }
+
+            string result = text;
+            string[] lines = rules.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string line in lines)
+            {
+                string[] parts = line.Split(',');
+                foreach (string part in parts)
+                {
+                    string trimmed = part.Trim();
+                    bool hasPart = !string.IsNullOrWhiteSpace(trimmed);
+                    if (!hasPart)
+                    {
+                        continue;
+                    }
+
+                    int eqIndex = trimmed.IndexOf('=');
+                    bool hasEquals = eqIndex > 0;
+                    if (!hasEquals)
+                    {
+                        continue;
+                    }
+
+                    string pattern = trimmed.Substring(0, eqIndex);
+                    string replacement = trimmed.Substring(eqIndex + 1);
+
+                    try
+                    {
+                        result = Regex.Replace(result, pattern, replacement);
+                    }
+                    catch
+                    {
+                        // 無効な正規表現は無視
+                    }
+                }
+            }
+
+            return result;
+        }
+
         private void ApplyOcrMatches(string filePath, List<OcrResult> texts)
         {
             if (texts == null || texts.Count == 0)
@@ -1035,10 +1276,21 @@ namespace PhotoLabel
                 return;
             }
 
-            ApplyItem1Match(joined);
-            ApplyComboMatch(Item2, joined);
-            ApplyComboMatch(Item3, joined);
-            ApplyComboMatch(Item4, joined);
+            // txtReplaceのルールで置換を適用
+            joined = ApplyReplaceRules(joined);
+
+            try
+            {
+                _suppressItemRename = true;
+                ApplyItem1Match(joined);
+                ApplyComboMatch(Item2, joined);
+                ApplyComboMatch(Item3, joined);
+                ApplyComboMatch(Item4, joined);
+            }
+            finally
+            {
+                _suppressItemRename = false;
+            }
 
             SaveItemSnapshot(filePath, Item1.Text, Item2.Text, Item3.Text, Item4.Text);
         }
@@ -1198,14 +1450,18 @@ namespace PhotoLabel
                 };
                 Tools.ParameterDict.SaveValues("Items", itemValues, configPath);
 
-                if (!string.IsNullOrWhiteSpace(txtTargetDir.Text))
+                bool hasTargetDir = !string.IsNullOrWhiteSpace(txtTargetDir.Text);
+                if (hasTargetDir)
                 {
-                    var targetDirValue = new Dictionary<string, string>
+                    var configValues = new Dictionary<string, string>
                     {
                         { TargetDirKey, txtTargetDir.Text }
                     };
-                    Tools.ParameterDict.SaveValues("Config", targetDirValue, configPath);
+                    Tools.ParameterDict.SaveValues("Config", configValues, configPath);
                 }
+
+                // 置換.csvに保存
+                SaveReplaceFile();
 
                 // reload combos and textboxes after save
                 LoadItemsFromConfig(configPath);
@@ -1314,23 +1570,27 @@ namespace PhotoLabel
                     _suppressBulkOcr = true;
                     LoadImagesForDirectory(_currentDirectory);
 
-                    var set = new HashSet<string>(renamedPaths, StringComparer.OrdinalIgnoreCase);
+                    HashSet<string> set = new HashSet<string>(renamedPaths, StringComparer.OrdinalIgnoreCase);
                     ThumbnailCard? first = null;
-                    foreach (var card in flowThumbs.Controls.OfType<ThumbnailCard>())
+                    foreach (ThumbnailCard card in flowThumbs.Controls.OfType<ThumbnailCard>())
                     {
-                        if (set.Contains(card.FilePath))
+                        bool isTarget = set.Contains(card.FilePath);
+                        if (!isTarget)
                         {
-                            card.SelectionCheckBox.Checked = true;
-                            first ??= card;
+                            continue;
+                        }
+
+                        AddToSelection(card);
+                        if (first == null)
+                        {
+                            first = card;
                         }
                     }
 
-                    if (first != null)
+                    bool hasFirst = first != null;
+                    if (hasFirst)
                     {
-                        ClearAllSelections();
-                        AddToSelection(first);
-                        _lastSelectedCard = first;
-                        _ = ShowPreviewAsync(first.FilePath);
+                        SetCursorCard(first, true);
                     }
                 }
                 finally
@@ -1349,7 +1609,7 @@ namespace PhotoLabel
 
         private void cbxSelect_CheckedChanged(object sender, EventArgs e)
         {
-            var checkAll = cbxSelect.Checked;
+            bool checkAll = cbxSelect.Checked;
             bool hasMultipleSelection = _selectedCards.Count > 1;
 
             try
@@ -1358,30 +1618,63 @@ namespace PhotoLabel
 
                 if (hasMultipleSelection)
                 {
-                    foreach (var card in _selectedCards)
-                    {
-                        var chk = card.SelectionCheckBox;
-                        if (chk.Checked != checkAll)
-                        {
-                            chk.Checked = checkAll;
-                        }
-                    }
+                    List<ThumbnailCard> selectedCards = _selectedCards.ToList();
+                    ApplyBulkSelectionChange(selectedCards, checkAll);
                 }
                 else
                 {
-                    foreach (var card in flowThumbs.Controls.OfType<ThumbnailCard>())
-                    {
-                        var chk = card.SelectionCheckBox;
-                        if (chk.Checked != checkAll)
-                        {
-                            chk.Checked = checkAll;
-                        }
-                    }
+                    List<ThumbnailCard> allCards = flowThumbs.Controls.OfType<ThumbnailCard>().ToList();
+                    ApplyBulkSelectionChange(allCards, checkAll);
                 }
+
+                bool hasSelection = _selectedCards.Count > 0;
+                if (!hasSelection)
+                {
+                    ClearCursorCard();
+                    return;
+                }
+
+                ThumbnailCard? cursor = _lastSelectedCard;
+                bool hasCursor = cursor != null;
+                bool cursorSelected = false;
+                if (hasCursor && cursor != null)
+                {
+                    bool isSelected = _selectedCards.Contains(cursor);
+                    cursorSelected = isSelected;
+                }
+
+                if (cursorSelected)
+                {
+                    return;
+                }
+
+                ThumbnailCard? fallback = GetLastSelectedInDisplayOrder();
+                SetCursorCard(fallback, false);
             }
             finally
             {
                 _suppressBulkOcr = false;
+            }
+        }
+
+        private void ApplyBulkSelectionChange(List<ThumbnailCard> cards, bool checkAll)
+        {
+            // 一括操作は選択状態の同期だけに限定する
+            foreach (ThumbnailCard card in cards)
+            {
+                bool isChecked = card.SelectionCheckBox.Checked;
+                if (isChecked == checkAll)
+                {
+                    continue;
+                }
+
+                if (checkAll)
+                {
+                    AddToSelection(card);
+                    continue;
+                }
+
+                RemoveFromSelection(card);
             }
         }
 
@@ -1615,6 +1908,127 @@ namespace PhotoLabel
                 item4 ?? string.Empty);
         }
 
+        private Dictionary<string, string> GetItemMapFromUI()
+        {
+            return new Dictionary<string, string>
+            {
+                { "Item1", Item1.Text ?? string.Empty },
+                { "Item2", Item2.Text ?? string.Empty },
+                { "Item3", Item3.Text ?? string.Empty },
+                { "Item4", Item4.Text ?? string.Empty }
+            };
+        }
+
+        private void RenameCurrentCardFromItems()
+        {
+            ThumbnailCard? card = _lastSelectedCard;
+            bool hasCard = card != null;
+            if (!hasCard || card == null)
+            {
+                return;
+            }
+
+            string sourcePath = card.FilePath;
+            bool hasSource = !string.IsNullOrWhiteSpace(sourcePath);
+            if (!hasSource)
+            {
+                return;
+            }
+
+            bool fileExists = File.Exists(sourcePath);
+            if (!fileExists)
+            {
+                return;
+            }
+
+            string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName);
+            string pattern = DefaultRenamePattern;
+            try
+            {
+                var dict = new Tools.ParameterDict(configPath);
+                string? configured = dict.GetValue("Config", "Rename", pattern);
+                bool hasConfigured = !string.IsNullOrWhiteSpace(configured);
+                if (hasConfigured)
+                {
+                    pattern = configured!;
+                }
+            }
+            catch
+            {
+                // use default pattern
+            }
+
+            string ext = Path.GetExtension(sourcePath);
+            Dictionary<string, string> map = GetItemMapFromUI();
+            string rawName = BuildRename(pattern, map, ext);
+            bool hasRawName = !string.IsNullOrWhiteSpace(rawName);
+            if (!hasRawName)
+            {
+                return;
+            }
+
+            string safeName = SanitizeFileName(rawName);
+            bool hasExtension = Path.HasExtension(safeName);
+            bool hasExt = !string.IsNullOrEmpty(ext);
+            if (!hasExtension && hasExt)
+            {
+                safeName += ext;
+            }
+
+            string? directory = Path.GetDirectoryName(sourcePath);
+            bool hasDirectory = !string.IsNullOrWhiteSpace(directory);
+            if (!hasDirectory)
+            {
+                return;
+            }
+
+            string destPath = Path.Combine(directory!, safeName);
+            bool samePath = string.Equals(sourcePath, destPath, StringComparison.OrdinalIgnoreCase);
+            if (samePath)
+            {
+                return;
+            }
+
+            string uniquePath = GetUniquePath(directory!, safeName);
+
+            try
+            {
+                File.Move(sourcePath, uniquePath);
+                card.UpdateFilePath(uniquePath);
+                MoveSnapshot(sourcePath, uniquePath);
+
+                bool isPreview = string.Equals(_currentPreviewPath, sourcePath, StringComparison.OrdinalIgnoreCase);
+                if (isPreview)
+                {
+                    _currentPreviewPath = uniquePath;
+                    try
+                    {
+                        webViewPreview.Source = new Uri(uniquePath);
+                    }
+                    catch
+                    {
+                        // ignore preview update errors
+                    }
+                }
+
+                SaveItemSnapshot(uniquePath, Item1.Text, Item2.Text, Item3.Text, Item4.Text);
+            }
+            catch
+            {
+                // リネーム失敗時は静かに無視（頻繁に呼ばれる可能性があるため）
+            }
+        }
+
+        private void Item_ValueChanged(object? sender, EventArgs e)
+        {
+            if (_suppressItemRename)
+            {
+                return;
+            }
+
+            RenameCurrentCardFromItems();
+        }
+
         private async void btnMove_Click(object sender, EventArgs e)
         {
             // チェック処理
@@ -1761,7 +2175,6 @@ namespace PhotoLabel
             {
                 _suppressBulkOcr = true;
                 ClearAllSelections();
-                _lastSelectedCard = null;
                 LoadImagesForDirectory(_currentDirectory);
 
                 bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
@@ -1850,13 +2263,7 @@ namespace PhotoLabel
 
             if (_isCardDragPending)
             {
-                ThumbnailCard? card = sender as ThumbnailCard;
-                bool wasClick = card != null && !HasExceededDragThreshold(_cardDragStartScreenPoint, Cursor.Position);
-                if (wasClick && card != null)
-                {
-                    _ = ShowPreviewAsync(card.FilePath);
-                }
-
+                // クリック時のプレビューは選択処理側で行う
                 ResetCardDragState();
             }
         }
@@ -1876,7 +2283,7 @@ namespace PhotoLabel
                 AddToSelection(card);
             }
 
-            _lastSelectedCard = card;
+            SetCursorCard(card, false);
             _isCardDragPending = true;
             _cardDragStartScreenPoint = screenPoint;
             _cardDragSource = card;
@@ -1925,21 +2332,33 @@ namespace PhotoLabel
                 ClearAllSelections();
             }
 
-            foreach (var card in flowThumbs.Controls.OfType<ThumbnailCard>())
+            ThumbnailCard? lastSelectedInRect = null;
+            foreach (ThumbnailCard card in flowThumbs.Controls.OfType<ThumbnailCard>())
             {
                 Rectangle cardBounds = card.Bounds;
                 bool intersects = selectionRect.IntersectsWith(cardBounds);
-                if (intersects)
+                if (!intersects)
                 {
-                    AddToSelection(card);
+                    continue;
                 }
+
+                AddToSelection(card);
+                lastSelectedInRect = card;
             }
 
             bool hasSelection = _selectedCards.Count > 0;
-            if (hasSelection)
+            if (!hasSelection)
             {
-                _lastSelectedCard = _selectedCards.Last();
+                return;
             }
+
+            bool hasCursorCandidate = lastSelectedInRect != null;
+            if (!hasCursorCandidate)
+            {
+                return;
+            }
+
+            SetCursorCard(lastSelectedInRect, true);
         }
 
         private void FlowThumbs_Paint(object? sender, PaintEventArgs e)
@@ -2223,11 +2642,16 @@ namespace PhotoLabel
                     _selectedCards.Remove(card);
                     flowThumbs.Controls.Remove(card);
 
+                    bool wasCursorCard = _lastSelectedCard == card;
+                    if (wasCursorCard)
+                    {
+                        ClearCursorCard();
+                    }
+
                     bool previewMatches = string.Equals(_currentPreviewPath, filePath, StringComparison.OrdinalIgnoreCase);
                     if (previewMatches)
                     {
                         _currentPreviewPath = string.Empty;
-                        _lastSelectedCard = null;
                         try
                         {
                             webViewPreview.Source = new Uri("about:blank");
@@ -2334,6 +2758,38 @@ namespace PhotoLabel
             }
 
             return true;
+        }
+
+        private void menuOpenExplorer_Click(object? sender, EventArgs e)
+        {
+            TreeNode? selectedNode = treDir.SelectedNode;
+            bool hasSelection = selectedNode != null;
+            if (!hasSelection)
+            {
+                return;
+            }
+
+            string? directoryPath = selectedNode?.Tag as string;
+            bool hasPath = !string.IsNullOrWhiteSpace(directoryPath);
+            if (!hasPath)
+            {
+                return;
+            }
+
+            bool exists = Directory.Exists(directoryPath);
+            if (!exists)
+            {
+                return;
+            }
+
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", directoryPath!);
+            }
+            catch
+            {
+                // Explorerの起動失敗は静かに無視
+            }
         }
 
         private void menuDeleteDirectory_Click(object? sender, EventArgs e)

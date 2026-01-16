@@ -17,6 +17,8 @@ namespace PhotoLabel
         private Label lblSize = null!;
         private Label lblName = null!;
         private TextBox txtRename = null!;
+        private const int CursorBorderWidth = 2;
+        private static readonly Color CursorBorderColor = Color.DarkOrange;
         private bool _cursorHighlighted;
         private bool _selectionHighlighted;
         private Color _groupBackgroundColor = SystemColors.Window;
@@ -128,12 +130,35 @@ namespace PhotoLabel
 
         public void SetSelected(bool selected)
         {
-            SetCursorHighlight(selected);
+            // 選択状態をチェックボックスと背景色に同期する
+            bool isSame = chkSelect.Checked == selected;
+            if (isSame)
+            {
+                SetSelectionHighlight(selected);
+                return;
+            }
+
+            chkSelect.Checked = selected;
         }
 
-        public void SetSelectionHighlight(bool selected)
+        public void SetCursorHighlight(bool highlighted)
         {
-            if (_selectionHighlighted == selected)
+            // カーソル枠線の表示を更新する
+            bool isSame = _cursorHighlighted == highlighted;
+            if (isSame)
+            {
+                return;
+            }
+
+            _cursorHighlighted = highlighted;
+            Invalidate();
+        }
+
+        private void SetSelectionHighlight(bool selected)
+        {
+            // 背景色の同期は選択状態のみで行う
+            bool isSame = _selectionHighlighted == selected;
+            if (isSame)
             {
                 return;
             }
@@ -142,23 +167,44 @@ namespace PhotoLabel
             ApplyHighlightState();
         }
 
-        private void SetCursorHighlight(bool highlighted)
+        private void ApplyHighlightState()
         {
-            if (_cursorHighlighted == highlighted)
+            bool isSelected = _selectionHighlighted;
+            IsSelected = isSelected;
+            BackColor = isSelected ? Color.LightSteelBlue : _groupBackgroundColor;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            bool hasCursor = _cursorHighlighted;
+            if (!hasCursor)
             {
                 return;
             }
 
-            _cursorHighlighted = highlighted;
-            ApplyHighlightState();
-        }
+            // カーソル位置を枠線で明示する
+            Rectangle bounds = ClientRectangle;
+            int borderWidth = CursorBorderWidth;
+            bool canDraw = bounds.Width > borderWidth * 2 && bounds.Height > borderWidth * 2;
+            if (!canDraw)
+            {
+                return;
+            }
 
-        private void ApplyHighlightState()
-        {
-            bool shouldHighlight = _cursorHighlighted || _selectionHighlighted;
-            IsSelected = shouldHighlight;
-            BackColor = shouldHighlight ? Color.LightSteelBlue : _groupBackgroundColor;
-            Invalidate();
+            int offset = borderWidth / 2;
+            Rectangle drawRect = new Rectangle(
+                bounds.X + offset,
+                bounds.Y + offset,
+                bounds.Width - borderWidth,
+                bounds.Height - borderWidth);
+
+            using (Pen pen = new Pen(CursorBorderColor, borderWidth))
+            {
+                e.Graphics.DrawRectangle(pen, drawRect);
+            }
         }
 
         public void SetGroupBackgroundColor(Color color)

@@ -1,56 +1,64 @@
-# PhotoLabel 移植方針（WinForms版）
+# PhotoLabel（WinForms版）
 
 ## 目的
-既存の ASP.NET Core Razor Pages アプリ「PictureSaver」（`Y:\Projects\job\int\aoyagi\source\PictureSaver`）の主要機能をデスクトップ向け WinForms クライアントに移植し、画像の閲覧・整理・OCR・リネーム/移動をローカルで完結できるようにする。
+既存の ASP.NET Core Razor Pages アプリ「PictureSaver」（`Y:\Projects\job\int\aoyagi\source\PictureSaver`）の主要機能を、デスクトップ向け WinForms クライアントとして移植・運用する。
 
-## 参照するソース機能
-- 3ペインUI: ディレクトリツリー／画像一覧（サムネ・メタ情報）／プレビュー＋OCR。
-- ファイル操作: リネーム（テンプレート/重複回避）、移動（テンプレート展開＋自動ディレクトリ作成）、ごみ箱移動、Explorer起動、ZIP相当（デスクトップでは任意）。
-- 入力エリア駆動の命名: Configの入力定義からコントロール生成、プレースホルダー展開でファイル名/移動先を生成。
-- OCR: Vision API（またはプロキシ）呼び出し、前処理、キャッシュ、置換ルール適用、結果から入力欄自動補完。
-- アップロード/ドラッグ&ドロップ: デスクトップではファイルコピーとして実装。
-- 設定駆動: Root/Trashパス、FileName/MoveDirectoryテンプレート、InputArea定義。
+## 概要
+画像の閲覧・整理・OCR・リネーム/移動をローカルで完結できるツール。  
+ディレクトリツリー／サムネ一覧／プレビュー（WebView2）／OCR の 3 ペイン UI を中心に構成。
 
-## フェーズ分割
-1) **基盤・設定**
-   - `appsettings.json` 相当を WinForms 設定に移植（Root/Trash パス、テンプレート、InputArea）。
-   - 設定ロード/検証とエラーハンドリングを実装。
-   - DirectoryItem/Input 定義モデルを用意。
+## 主要機能
+- ディレクトリツリーの遅延展開とサムネイル一覧
+- 画像プレビューと OCR 実行
+- OCR 結果からの入力補完（Item1〜4）
+- リネーム（テンプレート置換）と移動（MoveDir テンプレート）
+- 画像のドラッグ&ドロップ（外部からの取り込み／外部アプリへの搬出）
 
-2) **ディレクトリツリー＆画像一覧**
-   - Root からの遅延ロードツリー（隠し除外）。
-   - 画像拡張子フィルタ（HEIC/HEIF含む）、EXIF DateTaken優先ソート。
-   - サムネ生成・キャッシュ（`%Temp%/PhotoLabel/Thumbnails`）。
-   - 複数選択（Shift/Ctrl）と選択状態表示。
+## プログラム構造
+- エントリポイント  
+  - `Program.cs` が `FrmMain` を起動
+- メイン画面  
+  - `FrmMain.cs`  
+    - ディレクトリツリー／サムネ一覧／プレビュー（WebView2）  
+    - OCR 実行、入力補完、リネーム・移動、D&D を集約  
+    - ウィンドウ/スプリッタ位置、入力値を `Config.ini` に保存
+- 画像プレビュー専用ウィンドウ  
+  - `FrmPicture.cs`  
+    - 画像のみを大きく表示するシンプルビュー
+- サムネカード  
+  - `ThumbnailCard.cs`  
+    - 画像メタ情報の表示、選択/ハイライト、リネーム UI  
+    - サムネキャッシュは `%TEMP%/PhotoLabel/Thumbnails` に生成
+- OCR 関連  
+  - `Ocr/GoogleVisionClient.cs`  
+    - Vision API に画像を送信し結果を解析  
+  - `Ocr/OcrService.cs`  
+    - OCR 実行、キャッシュ、置換の統合  
+  - `Ocr/OcrCacheService.cs`  
+    - 画像ハッシュ＋サイズで結果キャッシュ（既定 24h）  
+  - `Ocr/ReplaceRuleStore.cs` / `Ocr/ReplaceService.cs`  
+    - `ReplaceRules.dat` の置換ルール適用
+- 設定読み書き  
+  - `Tools/ParameterDict.cs`  
+    - INI 風設定の読み書き
 
-3) **プレビュー＆基本操作**
-   - プレビューとメタ情報（パス・サイズ・日時）。
-   - Explorerで選択を開く。
-   - ごみ箱移動（重複時は連番）。
-   - ZIP保存相当を検討（任意）。
+## 設定ファイル
+`Config.ini` を起動時に読み込む。
 
-4) **入力エリア＆命名**
-   - Config定義から TextBox/ComboBox/Editable ComboBox（履歴付き）を生成。
-   - 入力値から自動ファイル名生成＋手動上書き可。
-   - リネーム（複数は連番＋重複回避）、移動（プレースホルダ展開＋自動作成）。
-   - プレースホルダ: `{RootDirectory}`, `{FileName}`, `{yyyyMMdd}`, `{<Title>}`, `{Title:start-length}`。
+```
+[Config]
+TargetDir=c:\temp\写真
+VisionApiUrl=https://app.ykr.ltd/vision/ocr
+ReplaceRulesPath=ReplaceRules.dat
+MoveDir={TargetDir}/{日付:4-2}/{Item1:0-6}/{Item1}/{FileName}
 
-5) **OCR＆置換ルール**
-   - OCRサービス連携（APIキー or プロキシ）、前処理、進捗UI。
-   - ハッシュ+サイズキーのメモリ/ディスクキャッシュ（24h）を実装。
-   - 置換ルール（SQLite）を順序適用。デスクトップ用CRUDダイアログ。
-   - OCR結果から入力欄を正規表現/履歴で自動補完。
-
-6) **ドラッグ&ドロップ／インポートUX**
-   - 画像一覧へのドラッグ&ドロップで現在ディレクトリへコピー（重複回避）。
-   - ツリー/一覧のリフレッシュと空ディレクトリ掃除。
-
-7) **仕上げ・堅牢化**
-   - スプリッタ幅などUI状態の永続化。
-   - ログ/例外ハンドリング、OCRキャンセル、プログレス表示。
-   - 大量ファイル/ロック/長パス/HEICなどの動作確認。
+[Items]
+Item1=(\d{3})\s?([A-Z0-9]{7,9})(-\d+)?=$1$2$3
+Item2=塗装,組立前,組立,COATING\s?THICKNESS\s?TESTER=テスター,外面,内面,駆動部,組立完成
+Item3=第\d層=$0
+Item4=塗装,組立前,組立,膜厚,膜厚ｱｯﾌﾟ,素地調整,素地調整前,素地調整後,性能試験,分解前, 分解中
+```
 
 ## 注意点
-- 文字化けしている `appsettings.json` の日本語ラベルは移植時に正しいUTF-8へ修正。
-- `screen.jpg` はリポジトリに含めない（参考イメージのみ）。
-- ソース参照: `PictureSaver` の Services（DirectoryService, ImageService, GoogleCloudVisionService, OcrCacheService, ReplaceService, OcrService）と `wwwroot/js` のUIロジック、`Pages/Index`/`ReplaceRules` の動作。***
+- `screen.jpg` は参考用のためリポジトリに含めない。
+- OCR 置換ルールは `ReplaceRules.dat` を使用する（JSON Lines 形式）。
