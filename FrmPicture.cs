@@ -98,19 +98,28 @@ namespace PhotoLabel
                 var dict = new Tools.ParameterDict(configPath);
 
                 // FrmPictureの位置とサイズ
-                int x = int.TryParse(dict.GetValue("Window", "PictureX", null), out var px) ? px : -1;
-                int y = int.TryParse(dict.GetValue("Window", "PictureY", null), out var py) ? py : -1;
-                int width = int.TryParse(dict.GetValue("Window", "PictureWidth", null), out var pw) ? pw : -1;
-                int height = int.TryParse(dict.GetValue("Window", "PictureHeight", null), out var ph) ? ph : -1;
+                var xStr = dict.GetValue("Window", "PictureX", null);
+                var yStr = dict.GetValue("Window", "PictureY", null);
+                var widthStr = dict.GetValue("Window", "PictureWidth", null);
+                var heightStr = dict.GetValue("Window", "PictureHeight", null);
 
-                bool hasPosition = x >= 0 && y >= 0;
-                bool hasSize = width > 0 && height > 0;
+                int x = 0, y = 0, width = 0, height = 0;
+                bool hasX = !string.IsNullOrEmpty(xStr) && int.TryParse(xStr, out x);
+                bool hasY = !string.IsNullOrEmpty(yStr) && int.TryParse(yStr, out y);
+                bool hasWidth = !string.IsNullOrEmpty(widthStr) && int.TryParse(widthStr, out width) && width > 0;
+                bool hasHeight = !string.IsNullOrEmpty(heightStr) && int.TryParse(heightStr, out height) && height > 0;
 
-                if (hasPosition && hasSize)
+                if (hasX && hasY && hasWidth && hasHeight)
                 {
-                    StartPosition = FormStartPosition.Manual;
-                    Location = new Point(x, y);
-                    Size = new Size(width, height);
+                    var rect = new Rectangle(x, y, width, height);
+                    // 画面領域内に表示されるか確認
+                    bool isVisible = Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(rect));
+                    if (isVisible)
+                    {
+                        StartPosition = FormStartPosition.Manual;
+                        Location = new Point(x, y);
+                        Size = new Size(width, height);
+                    }
                 }
             }
             catch

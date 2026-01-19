@@ -57,6 +57,7 @@ namespace PhotoLabel
             Item3 = new ComboBox();
             Item2 = new ComboBox();
             tabPage2 = new TabPage();
+            txtReplace = new TextBox();
             textBox1 = new TextBox();
             label5 = new Label();
             label4 = new Label();
@@ -70,7 +71,6 @@ namespace PhotoLabel
             txtTargetDir = new TextBox();
             btnSave = new Button();
             contextMenuStrip1 = new ContextMenuStrip(components);
-            txtReplace = new TextBox();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
@@ -396,6 +396,15 @@ namespace PhotoLabel
             tabPage2.Text = "設定";
             tabPage2.UseVisualStyleBackColor = true;
             // 
+            // txtReplace
+            // 
+            txtReplace.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            txtReplace.Location = new Point(9, 602);
+            txtReplace.Multiline = true;
+            txtReplace.Name = "txtReplace";
+            txtReplace.Size = new Size(1737, 142);
+            txtReplace.TabIndex = 14;
+            // 
             // textBox1
             // 
             textBox1.Location = new Point(0, 0);
@@ -441,6 +450,7 @@ namespace PhotoLabel
             // 
             // txtItem4
             // 
+            txtItem4.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtItem4.Location = new Point(116, 398);
             txtItem4.Multiline = true;
             txtItem4.Name = "txtItem4";
@@ -449,6 +459,7 @@ namespace PhotoLabel
             // 
             // txtItem3
             // 
+            txtItem3.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtItem3.Location = new Point(116, 287);
             txtItem3.Multiline = true;
             txtItem3.Name = "txtItem3";
@@ -457,6 +468,7 @@ namespace PhotoLabel
             // 
             // txtItem2
             // 
+            txtItem2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtItem2.Location = new Point(116, 181);
             txtItem2.Multiline = true;
             txtItem2.Name = "txtItem2";
@@ -465,6 +477,7 @@ namespace PhotoLabel
             // 
             // txtItem1
             // 
+            txtItem1.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtItem1.Location = new Point(116, 78);
             txtItem1.Multiline = true;
             txtItem1.Name = "txtItem1";
@@ -482,9 +495,10 @@ namespace PhotoLabel
             // 
             // txtTargetDir
             // 
+            txtTargetDir.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtTargetDir.Location = new Point(165, 507);
             txtTargetDir.Name = "txtTargetDir";
-            txtTargetDir.Size = new Size(1164, 39);
+            txtTargetDir.Size = new Size(1487, 39);
             txtTargetDir.TabIndex = 3;
             // 
             // btnSave
@@ -502,15 +516,6 @@ namespace PhotoLabel
             contextMenuStrip1.ImageScalingSize = new Size(32, 32);
             contextMenuStrip1.Name = "contextMenuStrip1";
             contextMenuStrip1.Size = new Size(61, 4);
-            // 
-            // txtReplace
-            // 
-            txtReplace.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtReplace.Location = new Point(9, 602);
-            txtReplace.Multiline = true;
-            txtReplace.Name = "txtReplace";
-            txtReplace.Size = new Size(1737, 142);
-            txtReplace.TabIndex = 14;
             // 
             // FrmMain
             // 

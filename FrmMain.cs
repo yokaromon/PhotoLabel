@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -55,6 +56,7 @@ namespace PhotoLabel
             treDir.MouseDown += TreDir_MouseDown;
             treDir.MouseMove += TreDir_MouseMove;
             treDir.MouseUp += TreDir_MouseUp;
+            treeContextMenu.Opening += TreeContextMenu_Opening;
             splitContainer2.SizeChanged += (_, _) => AdjustPaneWidthToCard();
             Resize += (_, _) => AdjustPaneWidthToCard();
             flowThumbs.ControlAdded += (_, _) => AdjustPaneWidthToCard();
@@ -1476,9 +1478,14 @@ namespace PhotoLabel
 
         private async void btnRename_Click(object sender, EventArgs e)
         {
+            L.ClearLog();
+            L.WriteLine("=== btnRename_Click 開始 ===");
+
             var targets = flowThumbs.Controls.OfType<ThumbnailCard>()
                 .Where(c => c.SelectionCheckBox.Checked)
                 .ToList();
+
+            L.WriteLine($"チェック済みカード数: {targets.Count}");
 
             if (targets.Count == 0)
             {
@@ -1511,11 +1518,18 @@ namespace PhotoLabel
                 try
                 {
                     var src = card.FilePath;
+                    L.WriteLine($"--- 処理開始: {Path.GetFileName(src)} ---");
+                    L.WriteLine($"  src: {src}");
+                    L.WriteLine($"  _itemSnapshots.ContainsKey: {_itemSnapshots.ContainsKey(src)}");
+
                     if (!_itemSnapshots.ContainsKey(src))
                     {
+                        L.WriteLine("  スナップショットなし → EnsureSnapshotAsync呼び出し");
                         var ok = await EnsureSnapshotAsync(src);
+                        L.WriteLine($"  EnsureSnapshotAsync結果: ok={ok}, ContainsKey={_itemSnapshots.ContainsKey(src)}");
                         if (!ok || !_itemSnapshots.ContainsKey(src))
                         {
+                            L.WriteLine("  → スキップ: OCR情報がありません");
                             errors.Add($"{Path.GetFileName(src)}: OCR情報がありません。");
                             continue;
                         }
@@ -1523,9 +1537,14 @@ namespace PhotoLabel
 
                     var ext = Path.GetExtension(src);
                     var map = GetItemMapForFile(src);
+                    L.WriteLine($"  Item1=[{map["Item1"]}] Item2=[{map["Item2"]}] Item3=[{map["Item3"]}] Item4=[{map["Item4"]}]");
+
                     var rawName = BuildRename(pattern, map, ext);
+                    L.WriteLine($"  rawName=[{rawName}]");
+
                     if (string.IsNullOrWhiteSpace(rawName))
                     {
+                        L.WriteLine("  → スキップ: rawNameが空");
                         errors.Add(Path.GetFileName(src));
                         continue;
                     }
@@ -1535,11 +1554,14 @@ namespace PhotoLabel
                     {
                         safeName += ext;
                     }
+                    L.WriteLine($"  safeName=[{safeName}]");
 
                     var destDir = Path.GetDirectoryName(src) ?? string.Empty;
                     var destPath = GetUniquePath(destDir, safeName);
+                    L.WriteLine($"  destPath=[{destPath}]");
 
                     File.Move(src, destPath);
+                    L.WriteLine($"  File.Move成功");
                     card.UpdateFilePath(destPath);
                     MoveSnapshot(src, destPath);
                     if (_currentPreviewPath == src)
@@ -1556,9 +1578,11 @@ namespace PhotoLabel
                     }
                     renamed++;
                     renamedPaths.Add(destPath);
+                    L.WriteLine($"  リネーム完了");
                 }
                 catch (Exception ex)
                 {
+                    L.WriteLine($"  例外発生: {ex.Message}");
                     errors.Add($"{Path.GetFileName(card.FilePath)}: {ex.Message}");
                 }
             }
@@ -1604,6 +1628,7 @@ namespace PhotoLabel
             {
                 message += $"\n失敗: {errors.Count} 件\n" + string.Join("\n", errors.Take(10));
             }
+            L.WriteLine($"=== btnRename_Click 終了: 成功={renamed}, 失敗={errors.Count} ===");
             MessageBox.Show(message, "Rename", MessageBoxButtons.OK, errors.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
@@ -1834,10 +1859,35 @@ namespace PhotoLabel
             }
 
             var extensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".heic", ".heif" };
+
+            // ドロップされたパスを展開（ディレクトリの場合は再帰的にファイルを取得）
+            var filesToCopy = new List<string>();
+            foreach (var path in dropped)
+            {
+                if (Directory.Exists(path))
+                {
+                    // ディレクトリの場合は下層のファイルを再帰的に検索
+                    try
+                    {
+                        var files = Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
+                            .Where(f => extensions.Any(ext => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)));
+                        filesToCopy.AddRange(files);
+                    }
+                    catch
+                    {
+                        // アクセスできないディレクトリは無視
+                    }
+                }
+                else if (File.Exists(path))
+                {
+                    filesToCopy.Add(path);
+                }
+            }
+
             var copied = 0;
             var errors = new List<string>();
 
-            foreach (var path in dropped)
+            foreach (var path in filesToCopy)
             {
                 try
                 {
@@ -3038,6 +3088,74 @@ namespace PhotoLabel
             }
 
             ResetTreeDragState();
+        }
+
+        private void TreeContextMenu_Opening(object? sender, CancelEventArgs e)
+        {
+            // 右クリック位置のノードから削除メニューの表示可否を判定
+            TreeNode? targetNode = GetContextMenuTargetNode();
+            bool hasTargetNode = targetNode != null;
+            if (!hasTargetNode)
+            {
+                menuDeleteDirectory.Visible = true;
+                return;
+            }
+
+            treDir.SelectedNode = targetNode;
+
+            string? directoryPath = targetNode.Tag as string;
+            bool isPathEmpty = string.IsNullOrWhiteSpace(directoryPath);
+            bool hasPath = !isPathEmpty;
+            if (!hasPath)
+            {
+                menuDeleteDirectory.Visible = true;
+                return;
+            }
+
+            string directoryName = Path.GetFileName(directoryPath);
+            bool isNameEmpty = string.IsNullOrWhiteSpace(directoryName);
+            bool hasName = !isNameEmpty;
+            if (!hasName)
+            {
+                directoryName = directoryPath;
+            }
+
+            bool isProtected = IsProtectedDirectoryName(directoryName);
+            menuDeleteDirectory.Visible = !isProtected;
+        }
+
+        private TreeNode? GetContextMenuTargetNode()
+        {
+            // コンテキストメニューの表示位置からノードを取得
+            Point screenPoint = Cursor.Position;
+            Point clientPoint = treDir.PointToClient(screenPoint);
+            TreeNode? nodeAtPoint = treDir.GetNodeAt(clientPoint);
+            bool hasNode = nodeAtPoint != null;
+            if (hasNode)
+            {
+                return nodeAtPoint;
+            }
+
+            TreeNode? selectedNode = treDir.SelectedNode;
+            return selectedNode;
+        }
+
+        private static bool IsProtectedDirectoryName(string directoryName)
+        {
+            // 削除メニューを非表示にするディレクトリ名を判定
+            bool isPhoto = string.Equals(directoryName, "写真", StringComparison.OrdinalIgnoreCase);
+            if (isPhoto)
+            {
+                return true;
+            }
+
+            bool isWork = string.Equals(directoryName, "作業", StringComparison.OrdinalIgnoreCase);
+            if (isWork)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private List<string> GetFilesFromTreeNode(TreeNode? node)

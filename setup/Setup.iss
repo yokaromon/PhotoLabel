@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "PhotoLabel"
-#define MyAppVersion "0.9"
+#define MyAppVersion "0.91"
 #define MyAppPublisher "ykr.ltd"
 #define MyAppURL "https://www.ykr.ltd"
 #define MyAppExeName "PhotoLabel.exe"
