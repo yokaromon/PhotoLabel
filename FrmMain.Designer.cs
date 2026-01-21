@@ -43,6 +43,7 @@ namespace PhotoLabel
             splitContainer2 = new SplitContainer();
             flowThumbs = new FlowLayoutPanel();
             pnlAction = new Panel();
+            chkPicture = new CheckBox();
             cmbSort = new ComboBox();
             cbxSelect = new CheckBox();
             splitContainer3 = new SplitContainer();
@@ -225,6 +226,7 @@ namespace PhotoLabel
             // 
             // pnlAction
             // 
+            pnlAction.Controls.Add(chkPicture);
             pnlAction.Controls.Add(cmbSort);
             pnlAction.Controls.Add(cbxSelect);
             pnlAction.Dock = DockStyle.Top;
@@ -232,6 +234,18 @@ namespace PhotoLabel
             pnlAction.Name = "pnlAction";
             pnlAction.Size = new Size(934, 63);
             pnlAction.TabIndex = 0;
+            // 
+            // chkPicture
+            // 
+            chkPicture.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            chkPicture.AutoSize = true;
+            chkPicture.Location = new Point(837, 13);
+            chkPicture.Name = "chkPicture";
+            chkPicture.Size = new Size(94, 36);
+            chkPicture.TabIndex = 7;
+            chkPicture.Text = "写真";
+            chkPicture.UseVisualStyleBackColor = true;
+            chkPicture.CheckedChanged += chkPicture_CheckedChanged;
             // 
             // cmbSort
             // 
@@ -599,5 +613,6 @@ namespace PhotoLabel
         private TextBox textBox1;
         private TextBox txtReplace;
         private ContextMenuStrip contextMenuStrip1;
+        private CheckBox chkPicture;
     }
 }

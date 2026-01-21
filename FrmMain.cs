@@ -45,6 +45,7 @@ namespace PhotoLabel
         private bool _isTreeDragPending;
         private Point _treeDragStartPoint;
         private TreeNode? _treeDragNode;
+        private bool _suppressPictureToggle;
 
         public FrmMain()
         {
@@ -93,10 +94,25 @@ namespace PhotoLabel
 
                 txtTargetDir.Text = targetDir;
 
-                if (!Directory.Exists(targetDir))
+                bool targetDirExists = Directory.Exists(targetDir);
+                if (!targetDirExists)
                 {
-                    MessageBox.Show($"Target directory not found: {targetDir}", "Config Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
+                    // 起動時に存在しない場合は作成を試みる
+                    try
+                    {
+                        DirectoryInfo createdDirectory = Directory.CreateDirectory(targetDir);
+                        bool createdExists = Directory.Exists(createdDirectory.FullName);
+                        if (!createdExists)
+                        {
+                            MessageBox.Show($"Target directory not found: {targetDir}", "Config Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Target directory create failed: {targetDir}{Environment.NewLine}{ex.Message}", "Config Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
                 }
 
                 PopulateTree(targetDir);
@@ -113,6 +129,9 @@ namespace PhotoLabel
 
                 // ウィンドウとスプリッタの位置を復元
                 LoadWindowSettings(configPath);
+
+                // FrmPictureを作成してチェック状態と連動させる
+                CreateFrmPicture();
             }
             catch (Exception ex)
             {
@@ -309,21 +328,50 @@ namespace PhotoLabel
 
         private static string? ReadTargetDir(string configPath)
         {
-            foreach (var line in File.ReadLines(configPath))
+            foreach (string line in File.ReadLines(configPath))
             {
-                var trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#") || trimmed.StartsWith(";"))
+                string trimmed = line.Trim();
+                bool isEmpty = string.IsNullOrEmpty(trimmed);
+                bool isComment = trimmed.StartsWith("#") || trimmed.StartsWith(";");
+                if (isEmpty || isComment)
                 {
                     continue;
                 }
 
-                if (trimmed.StartsWith($"{TargetDirKey}=", StringComparison.OrdinalIgnoreCase))
+                bool isTargetDir = trimmed.StartsWith($"{TargetDirKey}=", StringComparison.OrdinalIgnoreCase);
+                if (isTargetDir)
                 {
-                    return trimmed.Substring(TargetDirKey.Length + 1).Trim();
+                    // TargetDirが相対指定の場合は実行ファイルのディレクトリを基準に補正する
+                    string rawTargetDir = trimmed.Substring(TargetDirKey.Length + 1).Trim();
+                    string? resolvedTargetDir = ResolveTargetDir(rawTargetDir);
+                    return resolvedTargetDir;
                 }
             }
 
             return null;
+        }
+
+        private static string? ResolveTargetDir(string targetDir)
+        {
+            // 設定値が空の場合は補正せずに終了
+            bool hasTargetDir = !string.IsNullOrWhiteSpace(targetDir);
+            if (!hasTargetDir)
+            {
+                return null;
+            }
+
+            // フルパスならそのまま、相対なら実行ファイルのフォルダ基準で解決
+            string trimmedTargetDir = targetDir.Trim();
+            bool isRooted = Path.IsPathRooted(trimmedTargetDir);
+            if (isRooted)
+            {
+                return trimmedTargetDir;
+            }
+
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string combinedPath = Path.Combine(baseDir, trimmedTargetDir);
+            string fullPath = Path.GetFullPath(combinedPath);
+            return fullPath;
         }
 
         private void PopulateTree(string rootPath)
@@ -1091,29 +1139,11 @@ namespace PhotoLabel
                 return;
             }
 
-            bool fileExists = File.Exists(filePath);
-            if (!fileExists)
-            {
-                return;
-            }
+            // ダブルクリック時は写真ウィンドウをONにする
+            chkPicture.Checked = true;
 
-            // FrmPictureが既に開いている場合
-            bool formIsOpen = _pictureForm != null && !_pictureForm.IsDisposed;
-            if (formIsOpen && _pictureForm != null)
-            {
-                _pictureForm.ShowImage(filePath);
-                _pictureForm.BringToFront();
-                _pictureForm.Activate();
-                return;
-            }
-
-            // 新しくFrmPictureを開く
-            _pictureForm = new FrmPicture();
-            _pictureForm.Owner = this;
-            _pictureForm.FormClosed += (_, _) => _pictureForm = null;
-            _pictureForm.ShowImage(filePath);
-            _pictureForm.Show();
-            _pictureForm.BringToFront();
+            // 直前にクリックしたカードの画像を表示する
+            UpdatePictureForm(filePath);
         }
 
         private void UpdatePictureForm(string filePath)
@@ -1137,6 +1167,42 @@ namespace PhotoLabel
             }
 
             _pictureForm?.ShowImage(filePath);
+        }
+
+        private void CreateFrmPicture()
+        {
+            // 既に生成済みの場合は再作成しない
+            bool formIsOpen = _pictureForm != null && !_pictureForm.IsDisposed;
+            if (formIsOpen)
+            {
+                return;
+            }
+
+            FrmPicture pictureForm = new FrmPicture();
+            pictureForm.Owner = this;
+            pictureForm.FormClosed += PictureForm_FormClosed;
+            _pictureForm = pictureForm;
+
+            // チェック状態に合わせて表示切替
+            bool isChecked = chkPicture.Checked;
+            _pictureForm.Visible = isChecked;
+        }
+
+        private void PictureForm_FormClosed(object? sender, FormClosedEventArgs e)
+        {
+            // フォームが閉じられた場合はチェックを解除する
+            bool previousSuppress = _suppressPictureToggle;
+            _suppressPictureToggle = true;
+            try
+            {
+                chkPicture.Checked = false;
+            }
+            finally
+            {
+                _suppressPictureToggle = previousSuppress;
+            }
+
+            _pictureForm = null;
         }
 
         private async Task RunOcrAsync(string filePath)
@@ -3212,6 +3278,44 @@ namespace PhotoLabel
         {
             _isTreeDragPending = false;
             _treeDragNode = null;
+        }
+
+        private void chkPicture_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_suppressPictureToggle)
+            {
+                return;
+            }
+
+            bool formIsOpen = _pictureForm != null && !_pictureForm.IsDisposed;
+            if (!formIsOpen)
+            {
+                CreateFrmPicture();
+            }
+
+            bool hasForm = _pictureForm != null;
+            if (!hasForm)
+            {
+                return;
+            }
+
+            bool isChecked = chkPicture.Checked;
+            _pictureForm.Visible = isChecked;
+
+            if (!isChecked)
+            {
+                return;
+            }
+
+            // 表示時は現在のプレビュー画像に同期
+            string filePath = _currentPreviewPath;
+            bool hasPath = !string.IsNullOrWhiteSpace(filePath);
+            if (!hasPath)
+            {
+                return;
+            }
+
+            _pictureForm.ShowImage(filePath);
         }
     }
 }
