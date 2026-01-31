@@ -50,6 +50,10 @@ namespace PhotoLabel
         public FrmMain()
         {
             InitializeComponent();
+            // キーボード操作をフォーム側で受け取る
+            KeyPreview = true;
+            // フローパネルへフォーカス可能にしてカーソル操作の受け皿にする
+            flowThumbs.TabStop = true;
             Load += FrmMain_Load;
             FormClosing += FrmMain_FormClosing;
             treDir.BeforeExpand += TreDir_BeforeExpand;
@@ -71,6 +75,19 @@ namespace PhotoLabel
             flowThumbs.Paint += FlowThumbs_Paint;
             _treeFilterTimer.Interval = 300;
             _treeFilterTimer.Tick += TreeFilterTimer_Tick;
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // カーソルキーによるカード移動を優先処理する
+            bool handled = TryHandleCardCursorMove(keyData);
+            if (handled)
+            {
+                return true;
+            }
+
+            bool baseResult = base.ProcessCmdKey(ref msg, keyData);
+            return baseResult;
         }
 
         private void FrmMain_Load(object? sender, EventArgs e)
@@ -956,6 +973,221 @@ namespace PhotoLabel
             }
         }
 
+        private bool TryHandleCardCursorMove(Keys keyData)
+        {
+            // フロー内で上下キーが押された場合のみ対象とする
+            Keys keyCode = keyData & Keys.KeyCode;
+            bool isUp = keyCode == Keys.Up;
+            bool isDown = keyCode == Keys.Down;
+            bool isMoveKey = isUp || isDown;
+            if (!isMoveKey)
+            {
+                return false;
+            }
+
+            Keys modifiers = keyData & Keys.Modifiers;
+            bool hasModifier = modifiers != Keys.None;
+            if (hasModifier)
+            {
+                return false;
+            }
+
+            bool isThumbsActive = IsFlowThumbsActive();
+            if (!isThumbsActive)
+            {
+                return false;
+            }
+
+            bool isTextInputFocused = IsFocusedOnTextInput();
+            if (isTextInputFocused)
+            {
+                return false;
+            }
+
+            List<ThumbnailCard> cards = GetCardsInDisplayOrder();
+            int cardCount = cards.Count;
+            if (cardCount == 0)
+            {
+                return false;
+            }
+
+            ThumbnailCard? cursorCard = _lastSelectedCard;
+            int cursorIndex = -1;
+            if (cursorCard != null)
+            {
+                int foundIndex = cards.IndexOf(cursorCard);
+                cursorIndex = foundIndex;
+            }
+
+            int targetIndex = GetNextCardIndex(cursorIndex, cardCount, isUp);
+            bool canMove = targetIndex >= 0 && targetIndex < cardCount;
+            if (!canMove)
+            {
+                return true;
+            }
+
+            bool isSameIndex = targetIndex == cursorIndex && cursorIndex >= 0;
+            if (isSameIndex)
+            {
+                return true;
+            }
+
+            ThumbnailCard targetCard = cards[targetIndex];
+            MoveCursorToCard(targetCard);
+            return true;
+        }
+
+        private void MoveCursorToCard(ThumbnailCard targetCard)
+        {
+            // キーボード操作時は単一選択に揃えてプレビューを更新する
+            ClearAllSelections();
+            AddToSelection(targetCard);
+            SetCursorCard(targetCard, true);
+            flowThumbs.ScrollControlIntoView(targetCard);
+            targetCard.Focus();
+        }
+
+        private void ActivateThumbnailPane()
+        {
+            // カード操作時は中ペインをアクティブにする
+            bool canFocus = flowThumbs.CanFocus;
+            if (!canFocus)
+            {
+                return;
+            }
+
+            bool focused = flowThumbs.Focused;
+            if (focused)
+            {
+                return;
+            }
+
+            flowThumbs.Focus();
+        }
+
+        private bool IsFlowThumbsActive()
+        {
+            // フォーカスが中ペイン内にあるかを判定する
+            Control? focusedControl = GetFocusedControl();
+            bool hasFocusedControl = focusedControl != null;
+            if (!hasFocusedControl || focusedControl == null)
+            {
+                return false;
+            }
+
+            bool isDirectFocus = focusedControl == flowThumbs;
+            if (isDirectFocus)
+            {
+                return true;
+            }
+
+            Control? current = focusedControl.Parent;
+            while (current != null)
+            {
+                bool isThumbsParent = current == flowThumbs;
+                if (isThumbsParent)
+                {
+                    return true;
+                }
+
+                current = current.Parent;
+            }
+
+            return false;
+        }
+
+        private bool IsFocusedOnTextInput()
+        {
+            // リネーム編集時は矢印キーの移動を無効化する
+            Control? focusedControl = GetFocusedControl();
+            bool hasFocusControl = focusedControl != null;
+            if (!hasFocusControl)
+            {
+                return false;
+            }
+
+            TextBox? textBox = focusedControl as TextBox;
+            bool isTextBox = textBox != null;
+            return isTextBox;
+        }
+
+        private Control? GetFocusedControl()
+        {
+            // フォーカスされている最深部のコントロールを取得する
+            Control? control = ActiveControl;
+            bool hasControl = control != null;
+            if (!hasControl)
+            {
+                return null;
+            }
+
+            while (true)
+            {
+                ContainerControl? container = control as ContainerControl;
+                bool isContainer = container != null;
+                if (!isContainer)
+                {
+                    break;
+                }
+
+                Control? active = container.ActiveControl;
+                bool hasActive = active != null;
+                if (!hasActive)
+                {
+                    break;
+                }
+
+                control = active;
+            }
+
+            return control;
+        }
+
+        private List<ThumbnailCard> GetCardsInDisplayOrder()
+        {
+            // FlowLayoutPanelの表示順でカード一覧を返す
+            List<ThumbnailCard> cards = new List<ThumbnailCard>();
+            foreach (Control control in flowThumbs.Controls)
+            {
+                ThumbnailCard? card = control as ThumbnailCard;
+                bool isCard = card != null;
+                if (!isCard)
+                {
+                    continue;
+                }
+
+                cards.Add(card);
+            }
+
+            return cards;
+        }
+
+        private static int GetNextCardIndex(int currentIndex, int count, bool moveUp)
+        {
+            // 境界外は現在位置を維持する
+            bool hasItems = count > 0;
+            if (!hasItems)
+            {
+                return -1;
+            }
+
+            bool hasCursor = currentIndex >= 0 && currentIndex < count;
+            if (!hasCursor)
+            {
+                int initialIndex = moveUp ? count - 1 : 0;
+                return initialIndex;
+            }
+
+            int nextIndex = moveUp ? currentIndex - 1 : currentIndex + 1;
+            bool outOfRange = nextIndex < 0 || nextIndex >= count;
+            if (outOfRange)
+            {
+                return currentIndex;
+            }
+
+            return nextIndex;
+        }
+
         private int GetCardIndex(ThumbnailCard card)
         {
             var controls = flowThumbs.Controls;
@@ -1002,6 +1234,7 @@ namespace PhotoLabel
         private void HandleCardClick(ThumbnailCard card)
         {
             // クリック選択はチェック状態とカーソル表示を同期する
+            ActivateThumbnailPane();
             bool ctrlPressed = (Control.ModifierKeys & Keys.Control) == Keys.Control;
             bool shiftPressed = (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
 
@@ -2335,6 +2568,7 @@ namespace PhotoLabel
                 return;
             }
 
+            ActivateThumbnailPane();
             _isDragging = true;
             _dragStartPoint = e.Location;
             _dragCurrentPoint = e.Location;
@@ -2387,6 +2621,7 @@ namespace PhotoLabel
         private void HandleCardMouseDown(ThumbnailCard card, Point screenPoint)
         {
             // カードをドラッグ対象にする前に選択状態を整える
+            ActivateThumbnailPane();
             bool alreadySelected = _selectedCards.Contains(card);
             if (!alreadySelected)
             {
