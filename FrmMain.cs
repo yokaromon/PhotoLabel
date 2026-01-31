@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -17,6 +18,8 @@ namespace PhotoLabel
         private const string ConfigFileName = "Config.ini";
         private const string TargetDirKey = "TargetDir";
         private const string InternalDragFormat = "PhotoLabel.InternalDrag";
+        private const string InternalDragFileListFormat = "PhotoLabel.InternalDragFiles";
+        private const string TreeNodeDragFormat = "PhotoLabel.TreeNodePath";
         private string _currentPreviewPath = string.Empty;
         private readonly HashSet<ThumbnailCard> _selectedCards = new();
         private ThumbnailCard? _lastSelectedCard;
@@ -46,6 +49,7 @@ namespace PhotoLabel
         private Point _treeDragStartPoint;
         private TreeNode? _treeDragNode;
         private bool _suppressPictureToggle;
+        private TreeNode? _treeDragHoverNode;
 
         public FrmMain()
         {
@@ -61,6 +65,14 @@ namespace PhotoLabel
             treDir.MouseDown += TreDir_MouseDown;
             treDir.MouseMove += TreDir_MouseMove;
             treDir.MouseUp += TreDir_MouseUp;
+            treDir.AllowDrop = true;
+            treDir.DragEnter += TreDir_DragEnter;
+            treDir.DragOver += TreDir_DragOver;
+            treDir.DragDrop += TreDir_DragDrop;
+            treDir.DragLeave += TreDir_DragLeave;
+            treDir.DrawMode = TreeViewDrawMode.OwnerDrawText;
+            treDir.HideSelection = false;
+            treDir.DrawNode += TreDir_DrawNode;
             treeContextMenu.Opening += TreeContextMenu_Opening;
             splitContainer2.SizeChanged += (_, _) => AdjustPaneWidthToCard();
             Resize += (_, _) => AdjustPaneWidthToCard();
@@ -652,6 +664,7 @@ namespace PhotoLabel
                 bool useAlternateColor = false;
                 Color defaultColor = SystemColors.Window;
                 Color alternateColor = Color.FromArgb(245, 250, 255);
+                string previousFileName = string.Empty;
 
                 foreach (var filePath in files)
                 {
@@ -671,10 +684,14 @@ namespace PhotoLabel
                     var card = new ThumbnailCard(filePath);
                     Color backgroundColor = useAlternateColor ? alternateColor : defaultColor;
                     card.SetGroupBackgroundColor(backgroundColor);
+                    string currentFileName = Path.GetFileName(filePath);
+                    int highlightLength = GetCommonPrefixLength(previousFileName, currentFileName);
+                    card.SetNameHighlight(highlightLength, NameHighlightStyle.BlueText);
                     WireCardEvents(card);
                     flowThumbs.Controls.Add(card);
 
                     previousGroup = currentGroup;
+                    previousFileName = currentFileName;
                 }
                 AdjustPaneWidthToCard();
             }
@@ -1160,6 +1177,36 @@ namespace PhotoLabel
             }
 
             return cards;
+        }
+
+        private static int GetCommonPrefixLength(string first, string second)
+        {
+            // 前の行と同じ先頭部分の長さを取得する
+            string left = first ?? string.Empty;
+            string right = second ?? string.Empty;
+            bool hasLeft = left.Length > 0;
+            bool hasRight = right.Length > 0;
+            if (!hasLeft || !hasRight)
+            {
+                return 0;
+            }
+
+            int maxLength = Math.Min(left.Length, right.Length);
+            int index = 0;
+            while (index < maxLength)
+            {
+                char leftChar = left[index];
+                char rightChar = right[index];
+                bool sameChar = char.ToUpperInvariant(leftChar) == char.ToUpperInvariant(rightChar);
+                if (!sameChar)
+                {
+                    break;
+                }
+
+                index++;
+            }
+
+            return index;
         }
 
         private static int GetNextCardIndex(int currentIndex, int count, bool moveUp)
@@ -2778,6 +2825,8 @@ namespace PhotoLabel
             dataObject.SetFileDropList(dropList);
             // 内部ドラッグであることを示すマーカーを追加
             dataObject.SetData(InternalDragFormat, true);
+            // 内部ドラッグ用のファイル一覧を保持する
+            dataObject.SetData(InternalDragFileListFormat, fileArray);
 
             DragDropEffects allowedEffects = DragDropEffects.Copy | DragDropEffects.Move;
             DragDropEffects dragResult = flowThumbs.DoDragDrop(dataObject, allowedEffects);
@@ -3391,6 +3440,551 @@ namespace PhotoLabel
             ResetTreeDragState();
         }
 
+        private void TreDir_DragEnter(object? sender, DragEventArgs e)
+        {
+            // ツリーへのドロップ可否を判定する
+            UpdateTreeDragEffect(e);
+        }
+
+        private void TreDir_DragOver(object? sender, DragEventArgs e)
+        {
+            // ドロップ先候補を表示しつつ効果を更新する
+            UpdateTreeDragEffect(e);
+
+            TreeNode? node = GetTreeNodeFromDragPoint(e);
+            bool hasNode = node != null;
+            if (!hasNode)
+            {
+                SetTreeDragHoverNode(null);
+                return;
+            }
+
+            treDir.SelectedNode = node;
+            SetTreeDragHoverNode(node);
+        }
+
+        private void TreDir_DragDrop(object? sender, DragEventArgs e)
+        {
+            // ドロップ先フォルダにファイル/フォルダを移動する
+            TreeNode? targetNode = GetTreeNodeFromDragPoint(e);
+            bool hasTargetNode = targetNode != null;
+            if (!hasTargetNode || targetNode == null)
+            {
+                SetTreeDragHoverNode(null);
+                return;
+            }
+
+            string? targetPath = targetNode.Tag as string;
+            bool hasTargetPath = !string.IsNullOrWhiteSpace(targetPath);
+            if (!hasTargetPath || targetPath == null)
+            {
+                SetTreeDragHoverNode(null);
+                return;
+            }
+
+            bool targetExists = Directory.Exists(targetPath);
+            if (!targetExists)
+            {
+                SetTreeDragHoverNode(null);
+                return;
+            }
+
+            bool hasData = e.Data != null;
+            if (!hasData || e.Data == null)
+            {
+                SetTreeDragHoverNode(null);
+                return;
+            }
+
+            bool handled = TryMoveTreeNodeDirectory(e.Data, targetPath);
+            if (!handled)
+            {
+                TryMoveDroppedPaths(e.Data, targetPath);
+            }
+
+            SetTreeDragHoverNode(null);
+        }
+
+        private void TreDir_DragLeave(object? sender, EventArgs e)
+        {
+            // ドラッグが離れたら強調表示を解除する
+            SetTreeDragHoverNode(null);
+        }
+
+        private static void UpdateTreeDragEffect(DragEventArgs e)
+        {
+            // ファイル/フォルダドロップのみ許可する
+            bool hasData = e.Data != null;
+            if (!hasData || e.Data == null)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            bool hasTreeNodePath = e.Data.GetDataPresent(TreeNodeDragFormat);
+            bool hasFileDrop = e.Data.GetDataPresent(DataFormats.FileDrop);
+            bool hasInternalFileDrop = e.Data.GetDataPresent(InternalDragFileListFormat);
+            bool canDrop = hasTreeNodePath || hasFileDrop || hasInternalFileDrop;
+            if (!canDrop)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            e.Effect = DragDropEffects.Move;
+        }
+
+        private void TreDir_DrawNode(object? sender, DrawTreeNodeEventArgs e)
+        {
+            // ドラッグ中の候補ノードを強調表示する
+            bool isHover = e.Node == _treeDragHoverNode;
+            if (!isHover)
+            {
+                e.DrawDefault = true;
+                return;
+            }
+
+            Rectangle bounds = GetTreeHoverBounds(treDir, e.Bounds);
+            using var backBrush = new SolidBrush(Color.FromArgb(210, 230, 255));
+            using var borderPen = new Pen(Color.DodgerBlue, 1);
+            e.Graphics.FillRectangle(backBrush, bounds);
+            e.Graphics.DrawRectangle(borderPen, bounds);
+
+            Font font = e.Node.NodeFont ?? treDir.Font;
+            Color textColor = treDir.ForeColor;
+            TextRenderer.DrawText(e.Graphics, e.Node.Text, font, e.Bounds, textColor, TextFormatFlags.GlyphOverhangPadding);
+        }
+
+        private static Rectangle GetTreeHoverBounds(TreeView tree, Rectangle nodeBounds)
+        {
+            // ツリー幅いっぱいに強調表示する
+            int width = Math.Max(1, tree.ClientSize.Width - nodeBounds.X - 4);
+            Rectangle rect = new Rectangle(nodeBounds.X, nodeBounds.Y, width, nodeBounds.Height);
+            return rect;
+        }
+
+        private void SetTreeDragHoverNode(TreeNode? node)
+        {
+            // ドラッグ中の強調ノードを更新する
+            bool isSame = _treeDragHoverNode == node;
+            if (isSame)
+            {
+                return;
+            }
+
+            TreeNode? previous = _treeDragHoverNode;
+            _treeDragHoverNode = node;
+            if (previous != null)
+            {
+                Rectangle prevBounds = GetTreeHoverBounds(treDir, previous.Bounds);
+                treDir.Invalidate(prevBounds);
+            }
+
+            if (node != null)
+            {
+                Rectangle nextBounds = GetTreeHoverBounds(treDir, node.Bounds);
+                treDir.Invalidate(nextBounds);
+            }
+        }
+
+        private TreeNode? GetTreeNodeFromDragPoint(DragEventArgs e)
+        {
+            // ドロップ座標から対象ノードを取得する
+            Point screenPoint = new Point(e.X, e.Y);
+            Point clientPoint = treDir.PointToClient(screenPoint);
+            TreeNode? node = treDir.GetNodeAt(clientPoint);
+            return node;
+        }
+
+        private bool TryMoveTreeNodeDirectory(IDataObject data, string targetPath)
+        {
+            // ツリー内ドラッグ時はディレクトリ移動を優先する
+            bool hasTreeNodePath = data.GetDataPresent(TreeNodeDragFormat);
+            if (!hasTreeNodePath)
+            {
+                return false;
+            }
+
+            object? raw = data.GetData(TreeNodeDragFormat);
+            string? sourcePath = raw as string;
+            bool hasSourcePath = !string.IsNullOrWhiteSpace(sourcePath);
+            if (!hasSourcePath || sourcePath == null)
+            {
+                return false;
+            }
+
+            List<string> errors = new List<string>();
+            bool moved = TryMoveDirectoryToTarget(sourcePath, targetPath, errors);
+            if (!moved)
+            {
+                bool hasErrors = errors.Count > 0;
+                if (hasErrors)
+                {
+                    MessageBox.Show($"移動に失敗しました。\n{string.Join("\n", errors.Take(10))}", "Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                return true;
+            }
+
+            RefreshAfterTreeMove(targetPath);
+            return true;
+        }
+
+        private void TryMoveDroppedPaths(IDataObject data, string targetPath)
+        {
+            // FileDropのパスを移動する
+            string[]? droppedPaths = GetDroppedPaths(data);
+            bool hasDropped = droppedPaths != null && droppedPaths.Length > 0;
+            if (!hasDropped || droppedPaths == null)
+            {
+                return;
+            }
+
+            int movedCount = 0;
+            List<string> errors = new List<string>();
+
+            foreach (string path in droppedPaths)
+            {
+                bool isDirectory = Directory.Exists(path);
+                if (isDirectory)
+                {
+                    bool movedDir = TryMoveDirectoryToTarget(path, targetPath, errors);
+                    if (movedDir)
+                    {
+                        movedCount++;
+                    }
+                    continue;
+                }
+
+                bool isFile = File.Exists(path);
+                if (!isFile)
+                {
+                    continue;
+                }
+
+                bool movedFile = TryMoveFileToTarget(path, targetPath, errors);
+                if (movedFile)
+                {
+                    movedCount++;
+                }
+            }
+
+            bool hasMoved = movedCount > 0;
+            if (hasMoved)
+            {
+                RefreshAfterTreeMove(targetPath);
+            }
+
+            bool hasErrors = errors.Count > 0;
+            if (!hasErrors)
+            {
+                return;
+            }
+
+            MessageBox.Show($"移動に失敗しました。\n{string.Join("\n", errors.Take(10))}", "Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        private static string[]? GetDroppedPaths(IDataObject data)
+        {
+            // 内部ドラッグのファイル一覧を優先し、なければFileDropを使う
+            bool hasInternalList = data.GetDataPresent(InternalDragFileListFormat);
+            if (hasInternalList)
+            {
+                object? rawInternal = data.GetData(InternalDragFileListFormat);
+                string[]? internalPaths = rawInternal as string[];
+                bool hasInternal = internalPaths != null && internalPaths.Length > 0;
+                if (hasInternal)
+                {
+                    return internalPaths;
+                }
+            }
+
+            bool hasFileDrop = data.GetDataPresent(DataFormats.FileDrop);
+            if (!hasFileDrop)
+            {
+                return null;
+            }
+
+            object? raw = data.GetData(DataFormats.FileDrop);
+            string[]? droppedPaths = raw as string[];
+            bool hasDropped = droppedPaths != null && droppedPaths.Length > 0;
+            if (!hasDropped)
+            {
+                return null;
+            }
+
+            return droppedPaths;
+        }
+
+        private bool TryMoveDirectoryToTarget(string sourcePath, string targetPath, List<string> errors)
+        {
+            // ディレクトリを指定先へ移動する
+            bool sourceExists = Directory.Exists(sourcePath);
+            if (!sourceExists)
+            {
+                return false;
+            }
+
+            bool targetExists = Directory.Exists(targetPath);
+            if (!targetExists)
+            {
+                errors.Add("移動先フォルダが存在しません。");
+                return false;
+            }
+
+            string fullSource = Path.GetFullPath(sourcePath.TrimEnd(Path.DirectorySeparatorChar));
+            string fullTarget = Path.GetFullPath(targetPath.TrimEnd(Path.DirectorySeparatorChar));
+
+            bool sameDirectory = string.Equals(fullSource, fullTarget, StringComparison.OrdinalIgnoreCase);
+            if (sameDirectory)
+            {
+                return false;
+            }
+
+            bool targetInsideSource = IsSubPath(fullSource, fullTarget);
+            if (targetInsideSource)
+            {
+                errors.Add("移動先が移動元の配下です。");
+                return false;
+            }
+
+            string folderName = Path.GetFileName(fullSource);
+            bool hasFolderName = !string.IsNullOrWhiteSpace(folderName);
+            if (!hasFolderName)
+            {
+                return false;
+            }
+
+            string destinationPath = Path.Combine(fullTarget, folderName);
+            bool destinationExists = Directory.Exists(destinationPath);
+            if (destinationExists)
+            {
+                string uniqueDir = GetUniqueDirectoryPath(fullTarget, folderName);
+                destinationPath = uniqueDir;
+            }
+
+            try
+            {
+                Directory.Move(fullSource, destinationPath);
+                MoveSnapshotsForDirectory(fullSource, destinationPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{folderName}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool TryMoveFileToTarget(string sourcePath, string targetPath, List<string> errors)
+        {
+            // ファイルを指定先へ移動する
+            bool sourceExists = File.Exists(sourcePath);
+            if (!sourceExists)
+            {
+                return false;
+            }
+
+            string? sourceDirectory = Path.GetDirectoryName(sourcePath);
+            bool hasSourceDirectory = !string.IsNullOrWhiteSpace(sourceDirectory);
+            bool sameDirectory = hasSourceDirectory &&
+                                 string.Equals(sourceDirectory, targetPath, StringComparison.OrdinalIgnoreCase);
+            if (sameDirectory)
+            {
+                return false;
+            }
+
+            string fileName = Path.GetFileName(sourcePath);
+            string destinationPath = Path.Combine(targetPath, fileName);
+            bool destinationExists = File.Exists(destinationPath);
+            if (destinationExists)
+            {
+                bool isSame = AreFilesIdenticalByHash(sourcePath, destinationPath);
+                if (isSame)
+                {
+                    bool overwrote = TryOverwriteMove(sourcePath, destinationPath, errors);
+                    return overwrote;
+                }
+
+                string uniquePath = GetUniquePath(targetPath, fileName);
+                destinationPath = uniquePath;
+            }
+
+            try
+            {
+                File.Move(sourcePath, destinationPath);
+                MoveSnapshot(sourcePath, destinationPath);
+                UpdatePreviewPathIfMatched(sourcePath, destinationPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{fileName}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool TryOverwriteMove(string sourcePath, string destinationPath, List<string> errors)
+        {
+            // 同一ファイルの場合は上書き移動する
+            try
+            {
+                bool destinationExists = File.Exists(destinationPath);
+                if (destinationExists)
+                {
+                    File.Delete(destinationPath);
+                }
+
+                File.Move(sourcePath, destinationPath);
+                MoveSnapshot(sourcePath, destinationPath);
+                UpdatePreviewPathIfMatched(sourcePath, destinationPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                string fileName = Path.GetFileName(sourcePath);
+                errors.Add($"{fileName}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void UpdatePreviewPathIfMatched(string oldPath, string newPath)
+        {
+            // プレビュー対象のパス更新を行う
+            bool isPreviewTarget = string.Equals(_currentPreviewPath, oldPath, StringComparison.OrdinalIgnoreCase);
+            if (!isPreviewTarget)
+            {
+                return;
+            }
+
+            _currentPreviewPath = newPath;
+            try
+            {
+                webViewPreview.Source = new Uri(newPath);
+            }
+            catch
+            {
+                // プレビュー更新失敗は無視
+            }
+        }
+
+        private void MoveSnapshotsForDirectory(string oldDirectory, string newDirectory)
+        {
+            // ディレクトリ移動時にスナップショットのキーを移動する
+            string oldPrefix = EnsureTrailingSeparator(oldDirectory);
+            string newPrefix = EnsureTrailingSeparator(newDirectory);
+            List<string> keys = _itemSnapshots.Keys.ToList();
+
+            foreach (string key in keys)
+            {
+                bool isUnderOld = key.StartsWith(oldPrefix, StringComparison.OrdinalIgnoreCase);
+                if (!isUnderOld)
+                {
+                    continue;
+                }
+
+                string suffix = key.Substring(oldPrefix.Length);
+                string newPath = newPrefix + suffix;
+                if (_itemSnapshots.TryGetValue(key, out ItemSnapshot? snap) && snap != null)
+                {
+                    _itemSnapshots.Remove(key);
+                    _itemSnapshots[newPath] = snap;
+                }
+            }
+        }
+
+        private void RefreshAfterTreeMove(string targetPath)
+        {
+            // 移動後は該当フォルダで一覧を更新する
+            bool hasTarget = !string.IsNullOrWhiteSpace(targetPath);
+            if (!hasTarget)
+            {
+                return;
+            }
+
+            _currentDirectory = targetPath;
+            LoadImagesForDirectory(targetPath);
+
+            bool hasRootPath = !string.IsNullOrWhiteSpace(_treeRootPath);
+            bool rootExists = false;
+            if (hasRootPath)
+            {
+                bool exists = Directory.Exists(_treeRootPath);
+                rootExists = exists;
+            }
+
+            bool hasRoot = hasRootPath && rootExists;
+            if (!hasRoot)
+            {
+                return;
+            }
+
+            PopulateTree(_treeRootPath);
+        }
+
+        private static bool IsSubPath(string basePath, string candidatePath)
+        {
+            // 移動先が移動元配下か判定する
+            string baseFull = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string candidateFull = Path.GetFullPath(candidatePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            bool isSubPath = candidateFull.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase);
+            return isSubPath;
+        }
+
+        private static string EnsureTrailingSeparator(string path)
+        {
+            // パス末尾に区切り文字を付与する
+            string trimmed = path.TrimEnd(Path.DirectorySeparatorChar);
+            string normalized = trimmed + Path.DirectorySeparatorChar;
+            return normalized;
+        }
+
+        private static string GetUniqueDirectoryPath(string parentDirectory, string folderName)
+        {
+            // 連番付きディレクトリ名を生成する
+            string baseName = folderName.Trim();
+            string candidate = Path.Combine(parentDirectory, baseName);
+            int index = 1;
+            while (true)
+            {
+                bool exists = Directory.Exists(candidate);
+                if (!exists)
+                {
+                    break;
+                }
+
+                candidate = Path.Combine(parentDirectory, $"{baseName}_{index}");
+                index++;
+            }
+
+            return candidate;
+        }
+
+        private static bool AreFilesIdenticalByHash(string sourcePath, string destinationPath)
+        {
+            // ハッシュ値で同一ファイルか判定する
+            try
+            {
+                string sourceHash = ComputeFileHash(sourcePath);
+                string destinationHash = ComputeFileHash(destinationPath);
+                bool isSame = string.Equals(sourceHash, destinationHash, StringComparison.OrdinalIgnoreCase);
+                return isSame;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string ComputeFileHash(string filePath)
+        {
+            // ファイルのSHA256ハッシュを計算する
+            using SHA256 sha = SHA256.Create();
+            using FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            byte[] hash = sha.ComputeHash(stream);
+            string hex = Convert.ToHexString(hash);
+            return hex;
+        }
+
         private void TreeContextMenu_Opening(object? sender, CancelEventArgs e)
         {
             // 右クリック位置のノードから削除メニューの表示可否を判定
@@ -3503,6 +4097,12 @@ namespace PhotoLabel
             dropList.AddRange(fileArray);
             dataObject.SetFileDropList(dropList);
             dataObject.SetData(InternalDragFormat, true);
+            string? sourcePath = _treeDragNode?.Tag as string;
+            bool hasSourcePath = !string.IsNullOrWhiteSpace(sourcePath);
+            if (hasSourcePath)
+            {
+                dataObject.SetData(TreeNodeDragFormat, sourcePath);
+            }
 
             DragDropEffects allowedEffects = DragDropEffects.Copy | DragDropEffects.Move;
             treDir.DoDragDrop(dataObject, allowedEffects);

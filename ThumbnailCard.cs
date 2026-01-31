@@ -6,6 +6,12 @@ using System.Windows.Forms;
 
 namespace PhotoLabel
 {
+    public enum NameHighlightStyle
+    {
+        BlueText,
+        YellowHatch
+    }
+
     /// <summary>
     /// Thumbnail card for the image list (uses designer controls).
     /// </summary>
@@ -15,7 +21,7 @@ namespace PhotoLabel
         private CheckBox chkSelect = null!;
         private Label lblDate = null!;
         private Label lblSize = null!;
-        private Label lblName = null!;
+        private HighlightLabel lblName = null!;
         private TextBox txtRename = null!;
         private const int CursorBorderWidth = 2;
         private static readonly Color CursorBorderColor = Color.DarkOrange;
@@ -75,7 +81,10 @@ namespace PhotoLabel
 
         private void LoadMetadata(string filePath)
         {
-            lblName.Text = Path.GetFileName(filePath);
+            // ファイル名ラベルを更新し、強調表示の長さを補正する
+            string fileName = Path.GetFileName(filePath);
+            lblName.Text = fileName;
+            lblName.AdjustHighlightLength();
             var modified = File.GetLastWriteTime(filePath);
             lblDate.Text = $"Modified: {modified:yyyy/MM/dd HH:mm:ss}";
             lblSize.Text = GetImageSizeText(filePath);
@@ -211,6 +220,12 @@ namespace PhotoLabel
         {
             _groupBackgroundColor = color;
             ApplyHighlightState();
+        }
+
+        public void SetNameHighlight(int length, NameHighlightStyle style)
+        {
+            // ファイル名の共通部分を強調表示する
+            lblName.SetHighlight(length, style);
         }
 
         private static void GenerateThumbnail(string sourcePath, string thumbPath, int width, int height)
@@ -360,7 +375,7 @@ namespace PhotoLabel
             picBox = new PictureBox();
             chkSelect = new CheckBox();
             lblDate = new Label();
-            lblName = new Label();
+            lblName = new HighlightLabel();
             lblSize = new Label();
             ((System.ComponentModel.ISupportInitialize)picBox).BeginInit();
             SuspendLayout();
@@ -408,6 +423,7 @@ namespace PhotoLabel
             lblName.Size = new Size(100, 41);
             lblName.TabIndex = 3;
             lblName.Text = "Name";
+            lblName.BackColor = Color.Transparent;
             // 
             // lblSize
             // 
@@ -465,5 +481,95 @@ namespace PhotoLabel
 
         public string ProposedName { get; }
         public bool Success { get; set; }
+    }
+
+    internal sealed class HighlightLabel : Label
+    {
+        private const int PrefixPaddingAdjustment = 2;
+        private int _highlightLength;
+        private NameHighlightStyle _highlightStyle = NameHighlightStyle.BlueText;
+
+        public void SetHighlight(int length, NameHighlightStyle style)
+        {
+            // 強調表示の長さとスタイルを更新する
+            int safeLength = Math.Max(0, length);
+            string text = Text ?? string.Empty;
+            if (safeLength > text.Length)
+            {
+                safeLength = text.Length;
+            }
+
+            bool lengthChanged = _highlightLength != safeLength;
+            bool styleChanged = _highlightStyle != style;
+            if (!lengthChanged && !styleChanged)
+            {
+                return;
+            }
+
+            _highlightLength = safeLength;
+            _highlightStyle = style;
+            Invalidate();
+        }
+
+        public void AdjustHighlightLength()
+        {
+            // テキスト変更時に強調長を補正する
+            int length = _highlightLength;
+            string text = Text ?? string.Empty;
+            if (length > text.Length)
+            {
+                _highlightLength = text.Length;
+                Invalidate();
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            // ファイル名の共通部分だけを色分け描画する
+            string text = Text ?? string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            Rectangle bounds = ClientRectangle;
+            TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.Left | TextFormatFlags.VerticalCenter;
+            int highlightLength = _highlightLength;
+            bool hasHighlight = highlightLength > 0;
+            if (!hasHighlight)
+            {
+                TextRenderer.DrawText(e.Graphics, text, Font, bounds, ForeColor, flags);
+                return;
+            }
+
+            if (highlightLength >= text.Length)
+            {
+                Color highlightColor = GetHighlightTextColor();
+                TextRenderer.DrawText(e.Graphics, text, Font, bounds, highlightColor, flags);
+                return;
+            }
+
+            string prefix = text.Substring(0, highlightLength);
+            string suffix = text.Substring(highlightLength);
+
+            Color prefixColor = GetHighlightTextColor();
+            TextRenderer.DrawText(e.Graphics, prefix, Font, bounds, prefixColor, flags);
+
+            Size prefixSize = TextRenderer.MeasureText(e.Graphics, prefix, Font, bounds.Size, flags);
+            int offsetX = Math.Max(0, prefixSize.Width - PrefixPaddingAdjustment);
+            Rectangle suffixBounds = new Rectangle(bounds.X + offsetX, bounds.Y, Math.Max(0, bounds.Width - offsetX), bounds.Height);
+            TextRenderer.DrawText(e.Graphics, suffix, Font, suffixBounds, ForeColor, flags);
+        }
+
+        private Color GetHighlightTextColor()
+        {
+            // 強調表示の文字色を返す
+            if (_highlightStyle == NameHighlightStyle.BlueText)
+            {
+                return Color.DodgerBlue;
+            }
+
+            return ForeColor;
+        }
     }
 }
