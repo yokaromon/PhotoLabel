@@ -36,7 +36,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Config.ini"; DestDir: "{app}"; Flags: ignoreversion
+; 既存のConfig.iniがある場合は上書きしない
+Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Config.ini"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Microsoft.Web.WebView2.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Microsoft.Web.WebView2.WinForms.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Microsoft.Web.WebView2.Wpf.dll"; DestDir: "{app}"; Flags: ignoreversion
