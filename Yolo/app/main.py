@@ -25,7 +25,7 @@ train_service = TrainService(WORKSPACE_ROOT)
 inference_service = InferenceService(WORKSPACE_ROOT)
 
 app = FastAPI(title="License Plate YOLO Trainer")
-app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
+app.mount("/photolabel/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 
@@ -61,17 +61,17 @@ class TrainRequest(BaseModel):
     batch: int = 8
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/photolabel", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/api/classes")
+@app.get("/photolabel/api/classes")
 async def get_classes() -> JSONResponse:
     return JSONResponse({"classes": class_service.get_classes()})
 
 
-@app.post("/api/classes")
+@app.post("/photolabel/api/classes")
 async def save_classes(payload: ClassesRequest) -> JSONResponse:
     try:
         classes = class_service.save_classes(payload.classes)
@@ -80,7 +80,7 @@ async def save_classes(payload: ClassesRequest) -> JSONResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/load-images")
+@app.post("/photolabel/api/load-images")
 async def load_images(payload: LoadImagesRequest) -> JSONResponse:
     try:
         images = file_service.load_images(payload.folder_path)
@@ -94,7 +94,7 @@ async def load_images(payload: LoadImagesRequest) -> JSONResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/api/images")
+@app.get("/photolabel/api/images")
 async def get_images() -> JSONResponse:
     images = file_service.get_loaded_images()
     return JSONResponse({
@@ -105,7 +105,7 @@ async def get_images() -> JSONResponse:
     })
 
 
-@app.get("/api/image/{index}")
+@app.get("/photolabel/api/image/{index}")
 async def get_image(index: int) -> FileResponse:
     try:
         return FileResponse(file_service.get_image_by_index(index))
@@ -113,7 +113,7 @@ async def get_image(index: int) -> FileResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.get("/api/annotations/{image_name}")
+@app.get("/photolabel/api/annotations/{image_name}")
 async def get_annotations(image_name: str) -> JSONResponse:
     try:
         return JSONResponse(dataset_service.read_annotations(image_name))
@@ -121,7 +121,7 @@ async def get_annotations(image_name: str) -> JSONResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.post("/api/annotations/{image_name}")
+@app.post("/photolabel/api/annotations/{image_name}")
 async def save_annotations(image_name: str, payload: AnnotationRequest) -> JSONResponse:
     try:
         return JSONResponse(dataset_service.save_annotations(image_name, [box.model_dump() for box in payload.boxes]))
@@ -131,7 +131,7 @@ async def save_annotations(image_name: str, payload: AnnotationRequest) -> JSONR
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/prepare-dataset")
+@app.post("/photolabel/api/prepare-dataset")
 async def prepare_dataset(payload: PrepareDatasetRequest) -> JSONResponse:
     try:
         return JSONResponse(dataset_service.prepare_dataset(train_ratio=payload.train_ratio, seed=payload.seed))
@@ -139,7 +139,7 @@ async def prepare_dataset(payload: PrepareDatasetRequest) -> JSONResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/train")
+@app.post("/photolabel/api/train")
 async def train(payload: TrainRequest) -> JSONResponse:
     data_yaml = file_service.dataset_dir / "data.yaml"
     if not data_yaml.exists():
@@ -151,12 +151,12 @@ async def train(payload: TrainRequest) -> JSONResponse:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@app.get("/api/train-status")
+@app.get("/photolabel/api/train-status")
 async def train_status() -> JSONResponse:
     return JSONResponse(train_service.get_status())
 
 
-@app.post("/api/detect-board")
+@app.post("/photolabel/api/detect-board")
 async def detect_board(
     image: UploadFile = File(...),
     model_path: str | None = Form(default=None),
@@ -175,7 +175,7 @@ async def detect_board(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/crop-board")
+@app.post("/photolabel/api/crop-board")
 async def crop_board(
     image: UploadFile = File(...),
     model_path: str | None = Form(default=None),
@@ -213,6 +213,6 @@ async def crop_board(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/api/health")
+@app.get("/photolabel/api/health")
 async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})

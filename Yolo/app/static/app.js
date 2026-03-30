@@ -223,14 +223,14 @@ function setInferenceStatus(text) {
 }
 
 async function loadClasses() {
-  const data = await fetchJson("/api/classes");
+  const data = await fetchJson("/photolabel/api/classes");
   applyClasses(data.classes);
   document.getElementById("classesStatus").textContent = `利用中クラス: ${data.classes.join(", ")}`;
 }
 
 async function saveClasses() {
   const classes = document.getElementById("classPatternsInput").value.split(",").map((item) => item.trim()).filter(Boolean);
-  const data = await fetchJson("/api/classes", {
+  const data = await fetchJson("/photolabel/api/classes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ classes }),
@@ -240,7 +240,7 @@ async function saveClasses() {
 }
 
 async function loadAnnotations(imageName) {
-  const data = await fetchJson(`/api/annotations/${encodeURIComponent(imageName)}`);
+  const data = await fetchJson(`/photolabel/api/annotations/${encodeURIComponent(imageName)}`);
   applyClasses(data.classes || state.classes);
   state.boxes = (data.boxes || []).map((box) => ({
     class_id: Number(box.class_id ?? 0),
@@ -269,12 +269,12 @@ async function loadImageAt(index) {
     await loadAnnotations(imageInfo.name);
     drawCanvas();
   };
-  image.src = `/api/image/${index}`;
+  image.src = `/photolabel/api/image/${index}`;
 }
 
 async function loadImages() {
   const folderPath = document.getElementById("folderPath").value.trim();
-  const data = await fetchJson("/api/load-images", {
+  const data = await fetchJson("/photolabel/api/load-images", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ folder_path: folderPath || null }),
@@ -289,7 +289,7 @@ async function saveAnnotations() {
   if (!current) {
     return;
   }
-  await fetchJson(`/api/annotations/${encodeURIComponent(current.name)}`, {
+  await fetchJson(`/photolabel/api/annotations/${encodeURIComponent(current.name)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ boxes: state.boxes }),
@@ -297,7 +297,7 @@ async function saveAnnotations() {
 }
 
 async function prepareDataset() {
-  const data = await fetchJson("/api/prepare-dataset", {
+  const data = await fetchJson("/photolabel/api/prepare-dataset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
@@ -306,7 +306,7 @@ async function prepareDataset() {
 }
 
 async function startTraining() {
-  await fetchJson("/api/train", {
+  await fetchJson("/photolabel/api/train", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -319,7 +319,7 @@ async function startTraining() {
 }
 
 async function refreshTrainingStatus() {
-  const status = await fetchJson("/api/train-status");
+  const status = await fetchJson("/photolabel/api/train-status");
   const lines = [`status: ${status.status}`];
   if (status.result) {
     lines.push(`output_dir: ${status.result.output_dir}`);
@@ -357,7 +357,7 @@ function getInferenceFormData() {
 async function detectBoard() {
   const formData = getInferenceFormData();
   setInferenceStatus("bbox を取得しています...");
-  const response = await fetch("/api/detect-board", {
+  const response = await fetch("/photolabel/api/detect-board", {
     method: "POST",
     body: formData,
   });
@@ -387,7 +387,7 @@ async function cropBoard() {
   formData.append("margin_ratio", document.getElementById("marginRatioInput").value || "0");
   setInferenceStatus("crop 画像を取得しています...");
 
-  const response = await fetch("/api/crop-board", {
+  const response = await fetch("/photolabel/api/crop-board", {
     method: "POST",
     body: formData,
   });
