@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Model weights (large binary files)
+*.pt
+
+# YOLO training outputs
+workspace/runs/
+
+# Dataset label cache
+workspace/dataset/labels/*.cache

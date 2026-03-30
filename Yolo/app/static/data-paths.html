@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>データ保存先一覧</title>
+  <style>
+    :root {
+      --bg: #f4f1e8;
+      --panel: #fffdf8;
+      --line: #d2c8b9;
+      --text: #2b2418;
+      --accent: #a64b2a;
+      --ok: #24503a;
+      --ok-bg: rgba(63, 108, 81, 0.14);
+      --missing: #8a341d;
+      --missing-bg: rgba(166, 75, 42, 0.14);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(166, 75, 42, 0.18), transparent 30%),
+        linear-gradient(135deg, #efe6d5, var(--bg));
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(43, 36, 24, 0.08);
+    }
+    .item {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(63, 108, 81, 0.05);
+      margin-top: 12px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .ok { background: var(--ok-bg); color: var(--ok); }
+    .missing { background: var(--missing-bg); color: var(--missing); }
+    code {
+      display: block;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #201a14;
+      color: #f8f4ec;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <h1>データ保存先一覧</h1>
+      <p>このアプリが使う主な設定ファイル、dataset、学習済みモデルの保存先一覧です。</p>
+      <p><a href="/">トップページへ戻る</a></p>
+    </section>
+
+    <section>
+      <div class="item">
+        <div class="row">
+          <h2>クラス設定ファイル</h2>
+          <span class="chip ok">通常は存在</span>
+        </div>
+        <p>Web UI で編集したクラス一覧を保存します。</p>
+        <code>workspace/classes.json</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>元画像の既定フォルダ</h2>
+          <span class="chip ok">通常は存在</span>
+        </div>
+        <p>アノテーション対象として読み込む画像の置き場所です。</p>
+        <code>workspace/source_images/</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>学習用 dataset ルート</h2>
+          <span class="chip ok">Dataset生成後に利用</span>
+        </div>
+        <p>train / val の画像とラベルを自動生成する出力先です。</p>
+        <code>workspace/dataset/</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>学習設定 data.yaml</h2>
+          <span class="chip ok">Dataset生成後に作成</span>
+        </div>
+        <p>Ultralytics YOLO に渡す dataset 定義ファイルです。</p>
+        <code>workspace/dataset/data.yaml</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>学習結果ディレクトリ</h2>
+          <span class="chip ok">学習後に作成</span>
+        </div>
+        <p>学習ログや weights をまとめて保存するディレクトリです。</p>
+        <code>workspace/runs/train/</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>学習済み best.pt</h2>
+          <span class="chip ok">学習後に作成</span>
+        </div>
+        <p>最良スコアのモデル重みです。推論APIの既定モデルでもあります。</p>
+        <code>workspace/runs/train/weights/best.pt</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>学習済み last.pt</h2>
+          <span class="chip ok">学習後に作成</span>
+        </div>
+        <p>最後のエポック時点のモデル重みです。</p>
+        <code>workspace/runs/train/weights/last.pt</code>
+      </div>
+
+      <div class="item">
+        <div class="row">
+          <h2>推論APIの既定モデルパス</h2>
+          <span class="chip ok">model_path省略時に使用</span>
+        </div>
+        <p>detect-board / crop-board が既定で参照するモデルパスです。</p>
+        <code>workspace/runs/train/weights/best.pt</code>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

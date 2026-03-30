@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>License Plate YOLO Trainer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="layout">
+    <section class="panel">
+      <h1>License Plate YOLO Trainer</h1>
+      <div class="row">
+        <input id="folderPath" type="text" placeholder="画像フォルダ。空なら workspace/source_images">
+        <button id="loadImagesBtn">読み込み</button>
+      </div>
+      <p id="imageStatus">画像を読み込んでください。</p>
+      <p id="imageName">-</p>
+    </section>
+
+    <section class="panel">
+      <h2>クラス設定</h2>
+      <div class="row">
+        <input id="classPatternsInput" type="text" placeholder="Panel, Machine, Sheet">
+        <button id="saveClassesBtn">クラス更新</button>
+      </div>
+      <p id="classesStatus">クラスを読み込み中です。</p>
+      <label class="stacked-label">新規矩形のラベル
+        <select id="currentClassSelect"></select>
+      </label>
+    </section>
+
+    <section class="panel canvas-panel">
+      <canvas id="imageCanvas" width="960" height="640"></canvas>
+      <div class="toolbar">
+        <button id="prevBtn">前へ</button>
+        <button id="nextBtn">次へ</button>
+        <button id="saveBtn">保存</button>
+        <button id="undoBtn">最後の矩形を削除</button>
+        <button id="clearBtn">全クリア</button>
+      </div>
+      <p id="boxCount">矩形数: 0</p>
+      <div id="boxList" class="box-list"></div>
+    </section>
+
+    <section class="panel">
+      <h2>学習</h2>
+      <div class="grid">
+        <label>Model <input id="modelInput" type="text" value="yolov8n.pt"></label>
+        <label>Epochs <input id="epochsInput" type="number" value="50"></label>
+        <label>Img Size <input id="imgszInput" type="number" value="640"></label>
+        <label>Batch <input id="batchInput" type="number" value="8"></label>
+      </div>
+      <div class="toolbar">
+        <button id="prepareDatasetBtn">Dataset生成</button>
+        <button id="trainBtn">学習開始</button>
+      </div>
+      <p id="datasetStatus">dataset 未生成</p>
+      <pre id="trainLog"></pre>
+    </section>
+
+    <section class="panel inference-panel">
+      <h2>推論確認</h2>
+      <div class="grid">
+        <label>画像
+          <input id="inferenceImageInput" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+        </label>
+        <label>Model Path
+          <input id="inferenceModelPath" type="text" placeholder="空なら workspace/runs/train/weights/best.pt">
+        </label>
+        <label>Target Label
+          <select id="inferenceTargetLabel"></select>
+        </label>
+        <label>Margin Ratio
+          <input id="marginRatioInput" type="number" min="0" max="1" step="0.01" value="0.05">
+        </label>
+      </div>
+      <div class="toolbar">
+        <button id="detectBoardBtn">bbox取得</button>
+        <button id="cropBoardBtn">crop取得</button>
+      </div>
+      <p id="inferenceStatus">推論画像を選択してください。</p>
+      <div class="inference-preview-grid">
+        <div>
+          <h3>元画像 + bbox</h3>
+          <canvas id="inferenceCanvas" width="960" height="640"></canvas>
+        </div>
+        <div>
+          <h3>crop画像</h3>
+          <img id="cropPreview" alt="crop preview">
+        </div>
+      </div>
+      <pre id="inferenceResult">結果はまだありません。</pre>
+    </section>
+
+    <section class="panel">
+      <h2>補助ページ</h2>
+      <p><a href="/static/data-paths.html">データ保存先一覧ページを開く</a></p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,5 @@
+path: \\Mac\Home\Projects\job\int\aoyagi\source\PhotoLabel\Yolo\workspace\dataset
+train: images/train
+val: images/val
+names:
+  0: plate

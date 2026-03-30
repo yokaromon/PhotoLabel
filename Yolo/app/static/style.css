@@ -1,0 +1,160 @@
+:root {
+  --bg: #f4f1e8;
+  --panel: #fffdf8;
+  --line: #d2c8b9;
+  --text: #2b2418;
+  --accent: #a64b2a;
+  --accent-2: #3f6c51;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(166, 75, 42, 0.18), transparent 30%),
+    linear-gradient(135deg, #efe6d5, var(--bg));
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 20px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 12px 30px rgba(43, 36, 24, 0.08);
+}
+
+.canvas-panel,
+.inference-panel {
+  grid-column: span 2;
+}
+
+.row,
+.toolbar,
+.grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.grid label,
+.stacked-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  flex: 1 1 180px;
+}
+
+input,
+select,
+button {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font: inherit;
+}
+
+button {
+  color: white;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent-2);
+}
+
+canvas,
+#cropPreview {
+  width: 100%;
+  max-width: 960px;
+  border: 1px solid var(--line);
+  background: #ece8df;
+  display: block;
+  border-radius: 10px;
+}
+
+#cropPreview {
+  min-height: 320px;
+  object-fit: contain;
+}
+
+.inference-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.box-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.box-row {
+  display: grid;
+  grid-template-columns: 80px minmax(140px, 220px) 1fr 88px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(166, 75, 42, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.box-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.box-meta {
+  font-size: 12px;
+  color: #5e5547;
+}
+
+.box-empty {
+  color: #5e5547;
+}
+
+pre {
+  min-height: 220px;
+  padding: 12px;
+  background: #201a14;
+  color: #f8f4ec;
+  overflow: auto;
+  border-radius: 10px;
+}
+
+h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .canvas-panel,
+  .inference-panel {
+    grid-column: span 1;
+  }
+
+  .box-row {
+    grid-template-columns: 1fr;
+  }
+}
