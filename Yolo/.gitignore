@@ -1,3 +1,7 @@
+# VS Code (launch.jsonのみ追跡)
+!.vscode/
+!.vscode/launch.json
+
 # Python
 .venv/
 __pycache__/
