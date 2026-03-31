@@ -58,13 +58,30 @@ public readonly struct L
         }
     }
 
-    public static void ClearLog()
+    /// <summary>
+    /// ログをローテーションする。最大 maxGenerations 世代保持。
+    /// debug.log → debug.log.1 → debug.log.2 → ... → 削除
+    /// </summary>
+    public static void RotateLog(int maxGenerations = 3)
     {
         try
         {
             lock (_lock)
             {
-                File.WriteAllText(_logPath, string.Empty);
+                // 最古世代を削除
+                var oldest = $"{_logPath}.{maxGenerations}";
+                if (File.Exists(oldest)) File.Delete(oldest);
+
+                // 古い世代を1つずつ繰り上げ
+                for (int i = maxGenerations - 1; i >= 1; i--)
+                {
+                    var src = $"{_logPath}.{i}";
+                    var dst = $"{_logPath}.{i + 1}";
+                    if (File.Exists(src)) File.Move(src, dst);
+                }
+
+                // 現行ログを .1 へ
+                if (File.Exists(_logPath)) File.Move(_logPath, $"{_logPath}.1");
             }
         }
         catch

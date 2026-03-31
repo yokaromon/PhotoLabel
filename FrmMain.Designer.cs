@@ -59,7 +59,6 @@ namespace PhotoLabel
             Item2 = new ComboBox();
             tabPage2 = new TabPage();
             txtReplace = new TextBox();
-            textBox1 = new TextBox();
             label5 = new Label();
             label4 = new Label();
             label3 = new Label();
@@ -71,6 +70,7 @@ namespace PhotoLabel
             label1 = new Label();
             txtTargetDir = new TextBox();
             btnSave = new Button();
+            btnClearOcrCache = new Button();
             contextMenuStrip1 = new ContextMenuStrip(components);
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
@@ -309,6 +309,7 @@ namespace PhotoLabel
             // 
             // pnlControl
             // 
+            pnlControl.Controls.Add(btnClearOcrCache);
             pnlControl.Controls.Add(btnDelete);
             pnlControl.Controls.Add(btnRename);
             pnlControl.Controls.Add(btnMove);
@@ -390,7 +391,6 @@ namespace PhotoLabel
             // tabPage2
             // 
             tabPage2.Controls.Add(txtReplace);
-            tabPage2.Controls.Add(textBox1);
             tabPage2.Controls.Add(label5);
             tabPage2.Controls.Add(label4);
             tabPage2.Controls.Add(label3);
@@ -418,13 +418,6 @@ namespace PhotoLabel
             txtReplace.Name = "txtReplace";
             txtReplace.Size = new Size(1737, 142);
             txtReplace.TabIndex = 14;
-            // 
-            // textBox1
-            // 
-            textBox1.Location = new Point(0, 0);
-            textBox1.Name = "textBox1";
-            textBox1.Size = new Size(200, 39);
-            textBox1.TabIndex = 13;
             // 
             // label5
             // 
@@ -517,13 +510,23 @@ namespace PhotoLabel
             // 
             // btnSave
             // 
-            btnSave.Location = new Point(1503, 23);
+            btnSave.Location = new Point(19, 15);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(150, 46);
             btnSave.TabIndex = 2;
             btnSave.Text = "保存";
             btnSave.UseVisualStyleBackColor = true;
             btnSave.Click += btnSave_Click;
+            //
+            // btnClearOcrCache
+            //
+            btnClearOcrCache.Location = new Point(1737, 14);
+            btnClearOcrCache.Name = "btnClearOcrCache";
+            btnClearOcrCache.Size = new Size(150, 46);
+            btnClearOcrCache.TabIndex = 15;
+            btnClearOcrCache.Text = "キャッシュ全削除";
+            btnClearOcrCache.UseVisualStyleBackColor = true;
+            btnClearOcrCache.Click += btnClearOcrCache_Click;
             // 
             // contextMenuStrip1
             // 
@@ -610,9 +613,9 @@ namespace PhotoLabel
         private TextBox txtItem3;
         private TextBox txtItem2;
         private TextBox txtItem1;
-        private TextBox textBox1;
         private TextBox txtReplace;
         private ContextMenuStrip contextMenuStrip1;
         private CheckBox chkPicture;
+        private Button btnClearOcrCache;
     }
 }

@@ -23,7 +23,7 @@ namespace PhotoLabel
         private string _currentPreviewPath = string.Empty;
         private readonly HashSet<ThumbnailCard> _selectedCards = new();
         private ThumbnailCard? _lastSelectedCard;
-        private OcrService? _ocrService;
+        private PictureToText? _pictureToText;
         private const int WIDTH = 800;
         private Task? _webViewInitTask;
         private bool _suppressBulkOcr;
@@ -104,6 +104,9 @@ namespace PhotoLabel
 
         private void FrmMain_Load(object? sender, EventArgs e)
         {
+            L.RotateLog();
+            ThumbnailCard.CleanupCacheIfNeeded();
+
             try
             {
                 var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName);
@@ -113,6 +116,11 @@ namespace PhotoLabel
                     MessageBox.Show($"Config file not found: {configPath}", "Config Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
+
+                // ローカル設定はネットワーク状態に依存しないため先に読み込む
+                InitializeOcrServices(configPath);
+                LoadItemsFromConfig(configPath);
+                LoadReplaceFile();
 
                 var targetDir = ReadTargetDir(configPath);
                 if (string.IsNullOrWhiteSpace(targetDir))
@@ -146,10 +154,6 @@ namespace PhotoLabel
 
                 PopulateTree(targetDir);
                 LoadImagesForDirectory(targetDir);
-
-                InitializeOcrServices(configPath);
-                LoadItemsFromConfig(configPath);
-                LoadReplaceFile();
 
                 if (cmbSort.Items.Count > 0)
                 {
@@ -259,11 +263,42 @@ namespace PhotoLabel
                 var dict = new Tools.ParameterDict(configPath);
                 LoadItemTextBoxes(dict);
                 LoadItemCombos(dict);
+                SyncPictureToTextCandidates();
             }
             catch
             {
                 // ignore load errors
             }
+        }
+
+        /// <summary>
+        /// ComboBoxの候補とItem1パターンをPictureToTextに同期する。
+        /// LoadItemsFromConfig および btnSave_Click 後に呼ぶ。
+        /// </summary>
+        private void SyncPictureToTextCandidates()
+        {
+            if (_pictureToText == null)
+            {
+                return;
+            }
+
+            _pictureToText.Item1Pattern = txtItem1.Text ?? string.Empty;
+            _pictureToText.Item2Candidates = BuildItemCandidates(Item2);
+            _pictureToText.Item3Candidates = BuildItemCandidates(Item3);
+            _pictureToText.Item4Candidates = BuildItemCandidates(Item4);
+        }
+
+        private static List<ItemCandidate> BuildItemCandidates(ComboBox combo)
+        {
+            var entries = combo.Tag as List<ComboPatternEntry>;
+            if (entries == null)
+            {
+                return new List<ItemCandidate>();
+            }
+
+            return entries
+                .Select(e => new ItemCandidate(e.Pattern, e.Replacement))
+                .ToList();
         }
 
         private const string ReplaceFileName = "置換.csv";
@@ -319,6 +354,8 @@ namespace PhotoLabel
         private static void PopulateComboFromItems(ComboBox combo, string itemKey, Tools.ParameterDict dict)
         {
             var values = dict.GetValueArray("Items", itemKey);
+            // 候補を再構築した後に現在値を復元するため退避しておく
+            var previousText = combo.Text;
             combo.Items.Clear();
             combo.Tag = null;
             if (values == null)
@@ -348,10 +385,8 @@ namespace PhotoLabel
             }
 
             combo.Tag = entries;
-            if (combo.Items.Count > 0)
-            {
-                combo.SelectedIndex = 0;
-            }
+            // 再構築前の値を復元する（空の場合は未選択のまま）
+            combo.Text = previousText;
         }
 
 
@@ -1401,9 +1436,10 @@ namespace PhotoLabel
                 // ファイル名を「_」で分割してItem1〜4に設定
                 string[] parts = fileName.Split('_');
                 Item1.Text = parts.Length > 0 ? parts[0] : string.Empty;
-                Item2.Text = parts.Length > 1 ? parts[1] : string.Empty;
-                Item3.Text = parts.Length > 2 ? parts[2] : string.Empty;
-                Item4.Text = parts.Length > 3 ? parts[3] : string.Empty;
+                // ComboBoxは候補がある場合のみマッチした値を設定（候補外の残留値によるリネーム重複を防ぐ）
+                SetComboFromFilePart(Item2, parts.Length > 1 ? parts[1] : string.Empty);
+                SetComboFromFilePart(Item3, parts.Length > 2 ? parts[2] : string.Empty);
+                SetComboFromFilePart(Item4, parts.Length > 3 ? parts[3] : string.Empty);
             }
             finally
             {
@@ -1487,18 +1523,33 @@ namespace PhotoLabel
 
         private async Task RunOcrAsync(string filePath)
         {
+            // 一括選択操作中はOCRを抑止する
+            if (_suppressBulkOcr)
+            {
+                return;
+            }
+
             try
             {
-                if (_ocrService == null)
+                if (_pictureToText == null)
                 {
                     txtOcr.Text = "OCR service not configured.";
                     return;
                 }
 
+                SyncInlineReplaceRules();
                 txtOcr.Text = "Running OCR...";
-                var result = await _ocrService.ExtractTextAsync(filePath);
+                var result = await _pictureToText.ExecuteOcrAsync(filePath);
 
-                if (result.ExtractedTexts.Count == 0)
+                // OCR完了時点で別カードに切り替わっていたら結果を捨てる
+                bool isStillCurrent = string.Equals(_currentPreviewPath, filePath, StringComparison.OrdinalIgnoreCase);
+                if (!isStillCurrent)
+                {
+                    return;
+                }
+
+                bool hasText = result.RawTexts.Count > 0;
+                if (!hasText)
                 {
                     txtOcr.Text = "No text detected.";
                     return;
@@ -1506,19 +1557,72 @@ namespace PhotoLabel
 
                 var cacheNote = result.FromCache ? " (cache)" : string.Empty;
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine($"Detected {result.ExtractedTexts.Count} items{cacheNote}");
-                foreach (var item in result.ExtractedTexts)
+                sb.AppendLine($"Detected {result.RawTexts.Count} items{cacheNote}");
+                foreach (var item in result.RawTexts)
                 {
                     sb.AppendLine(item.Text);
                 }
                 txtOcr.Text = sb.ToString();
 
-                ApplyOcrMatches(filePath, result.ExtractedTexts);
+                L.WriteLine($"[SignboardCrop] {result.SignboardNote ?? "(no note)"}");
+                bool hasCropPath = !string.IsNullOrEmpty(result.SignboardCropPath);
+                if (hasCropPath)
+                {
+                    L.WriteLine($"[SignboardCrop] cropPath={result.SignboardCropPath}");
+                }
+
+                ApplyOcrMatchResult(filePath, result.Items);
             }
             catch (Exception ex)
             {
                 txtOcr.Text = $"OCR failed: {ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// バッチ処理専用OCR。isStillCurrentチェックとUI更新を行わず、スナップショット保存のみ行う。
+        /// </summary>
+        private async Task RunOcrForBatchAsync(string filePath)
+        {
+            if (_pictureToText == null)
+            {
+                return;
+            }
+
+            try
+            {
+                SyncInlineReplaceRules();
+                var result = await _pictureToText.ExecuteOcrAsync(filePath);
+                L.WriteLine($"[SignboardCrop] {result.SignboardNote ?? "(no note)"}");
+                bool hasCropPath = !string.IsNullOrEmpty(result.SignboardCropPath);
+                if (hasCropPath)
+                {
+                    L.WriteLine($"[SignboardCrop] cropPath={result.SignboardCropPath}");
+                }
+                bool hasItems = result.Items.Values.Any(v => !string.IsNullOrEmpty(v));
+                if (hasItems)
+                {
+                    ApplyOcrMatchResult(filePath, result.Items);
+                }
+            }
+            catch
+            {
+                // バッチ処理中のOCR失敗は無視
+            }
+        }
+
+        /// <summary>txtReplace の内容を PictureToText のインラインルールに同期する。</summary>
+        private void SyncInlineReplaceRules()
+        {
+            if (_pictureToText == null)
+            {
+                return;
+            }
+
+            string rules = txtReplace.Text ?? string.Empty;
+            _pictureToText.InlineReplaceRules = rules
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
         }
 
         private async Task<bool> EnsureSnapshotAsync(string filePath)
@@ -1535,10 +1639,10 @@ namespace PhotoLabel
                 return true;
             }
 
-            bool hasOcrService = _ocrService != null;
+            bool hasOcrService = _pictureToText != null;
             if (hasOcrService)
             {
-                await RunOcrAsync(filePath);
+                await RunOcrForBatchAsync(filePath);
                 bool cachedByOcr = _itemSnapshots.ContainsKey(filePath);
                 if (cachedByOcr)
                 {
@@ -1564,76 +1668,27 @@ namespace PhotoLabel
             return cachedAfterManual;
         }
 
-        private string ApplyReplaceRules(string text)
+
+        /// <summary>
+        /// PictureToText.ExecuteOcrAsync の結果をUIに反映してスナップショットを保存する。
+        /// </summary>
+        private void ApplyOcrMatchResult(string filePath, Dictionary<string, string> items)
         {
-            string rules = txtReplace.Text ?? string.Empty;
-            bool hasRules = !string.IsNullOrWhiteSpace(rules);
-            if (!hasRules)
-            {
-                return text;
-            }
-
-            string result = text;
-            string[] lines = rules.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (string line in lines)
-            {
-                string[] parts = line.Split(',');
-                foreach (string part in parts)
-                {
-                    string trimmed = part.Trim();
-                    bool hasPart = !string.IsNullOrWhiteSpace(trimmed);
-                    if (!hasPart)
-                    {
-                        continue;
-                    }
-
-                    int eqIndex = trimmed.IndexOf('=');
-                    bool hasEquals = eqIndex > 0;
-                    if (!hasEquals)
-                    {
-                        continue;
-                    }
-
-                    string pattern = trimmed.Substring(0, eqIndex);
-                    string replacement = trimmed.Substring(eqIndex + 1);
-
-                    try
-                    {
-                        result = Regex.Replace(result, pattern, replacement);
-                    }
-                    catch
-                    {
-                        // 無効な正規表現は無視
-                    }
-                }
-            }
-
-            return result;
-        }
-
-        private void ApplyOcrMatches(string filePath, List<OcrResult> texts)
-        {
-            if (texts == null || texts.Count == 0)
-            {
-                return;
-            }
-
-            var joined = string.Join("\n", texts.Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)));
-            if (string.IsNullOrWhiteSpace(joined))
-            {
-                return;
-            }
-
-            // txtReplaceのルールで置換を適用
-            joined = ApplyReplaceRules(joined);
-
             try
             {
                 _suppressItemRename = true;
-                ApplyItem1Match(joined);
-                ApplyComboMatch(Item2, joined);
-                ApplyComboMatch(Item3, joined);
-                ApplyComboMatch(Item4, joined);
+
+                Item1.Text = items.GetValueOrDefault("Item1", string.Empty);
+                // Item1が取得できなかった場合、直前の写真のItem1をフォールバックとして設定
+                bool item1Empty = string.IsNullOrEmpty(Item1.Text);
+                if (item1Empty)
+                {
+                    Item1.Text = GetPreviousItem1(filePath);
+                }
+
+                SetComboValue(Item2, items.GetValueOrDefault("Item2", string.Empty));
+                SetComboValue(Item3, items.GetValueOrDefault("Item3", string.Empty));
+                SetComboValue(Item4, items.GetValueOrDefault("Item4", string.Empty));
             }
             finally
             {
@@ -1643,40 +1698,60 @@ namespace PhotoLabel
             SaveItemSnapshot(filePath, Item1.Text, Item2.Text, Item3.Text, Item4.Text);
         }
 
-        private void ApplyItem1Match(string text)
+        /// <summary>ComboBoxにOCRマッチ結果の値を設定する。</summary>
+        private static void SetComboValue(ComboBox combo, string value)
         {
-            Item1.Text = string.Empty;
-            try
+            if (string.IsNullOrEmpty(value))
             {
-                var dict = new Tools.ParameterDict(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFileName));
-                var raw = dict.GetValue("Items", "Item1", string.Empty) ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(raw))
-                {
-                    return;
-                }
-
-                var parts = raw.Split('=', 2);
-                var pattern = parts[0];
-                var replacement = parts.Length > 1 ? parts[1] : "$0";
-                if (string.IsNullOrWhiteSpace(pattern))
-                {
-                    return;
-                }
-
-                var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-                var match = regex.Match(text);
-                if (!match.Success)
-                {
-                    return;
-                }
-
-                var value = match.Result(replacement);
-                Item1.Text = value;
+                combo.SelectedIndex = -1;
+                combo.Text = string.Empty;
+                return;
             }
-            catch
+            int idx = combo.Items.IndexOf(value);
+            if (idx >= 0)
             {
-                // ignore invalid regex or read errors
+                combo.SelectedIndex = idx;
             }
+            else
+            {
+                combo.Text = value;
+            }
+        }
+
+        private string GetPreviousItem1(string filePath)
+        {
+            var cards = GetCardsInDisplayOrder();
+            int idx = cards.FindIndex(c => string.Equals(c.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+            if (idx <= 0)
+            {
+                return string.Empty;
+            }
+
+            for (int i = idx - 1; i >= 0; i--)
+            {
+                bool hasSnapshot = _itemSnapshots.TryGetValue(cards[i].FilePath, out var prev);
+                if (hasSnapshot && !string.IsNullOrEmpty(prev?.Item1))
+                {
+                    return prev.Item1;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static void SetComboFromFilePart(ComboBox combo, string value)
+        {
+            var entries = combo.Tag as List<ComboPatternEntry>;
+            bool hasCandidates = entries != null && entries.Count > 0;
+            if (!hasCandidates)
+            {
+                // 候補未設定のComboBoxは自由テキストとしてそのまま設定
+                combo.Text = value;
+                return;
+            }
+
+            // 候補があるComboBoxはマッチした候補のみ設定（マッチしなければクリア）
+            ApplyComboMatch(combo, value);
         }
 
         private static void ApplyComboMatch(ComboBox combo, string text)
@@ -1689,7 +1764,10 @@ namespace PhotoLabel
                 return;
             }
 
-            foreach (var entry in entries)
+            // 長いパターンを優先して一致させる（例: "塗装上塗り" が "塗装" より先にマッチするように）
+            var sortedEntries = entries.OrderByDescending(e => e.Pattern.Length).ToList();
+
+            foreach (var entry in sortedEntries)
             {
                 var pattern = entry.Pattern;
                 var replacement = entry.Replacement;
@@ -1772,11 +1850,12 @@ namespace PhotoLabel
                 visionUrl ??= "https://vision.googleapis.com/v1/images:annotate";
                 replacePath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ReplaceRules.dat");
 
-                var rules = new ReplaceRuleStore(replacePath).Load();
-                var replace = new ReplaceService(rules);
-                var cache = new OcrCacheService("PhotoLabel");
-                var client = new GoogleVisionClient(visionUrl, apiKey);
-                _ocrService = new OcrService(client, cache, replace);
+                var fileReplaceRules = new ReplaceRuleStore(replacePath).Load();
+                _pictureToText = new PictureToText(visionUrl, apiKey)
+                {
+                    FileReplaceRules = fileReplaceRules,
+                    EnableSignboardCrop = true,
+                };
             }
             catch (Exception ex)
             {
@@ -1822,9 +1901,37 @@ namespace PhotoLabel
             }
         }
 
+        private void btnClearOcrCache_Click(object sender, EventArgs e)
+        {
+            // OCRキャッシュ（LocalAppData）
+            _pictureToText?.ClearCache();
+
+            // サムネイル・看板切り抜きキャッシュ（%TEMP%\PhotoLabel）
+            var photoLabelTemp = Path.Combine(Path.GetTempPath(), "PhotoLabel");
+            try
+            {
+                if (Directory.Exists(photoLabelTemp))
+                {
+                    Directory.Delete(photoLabelTemp, recursive: true);
+                }
+            }
+            catch
+            {
+                // 削除失敗は無視
+            }
+
+            // サムネイルを再生成するため現在のディレクトリを再読み込み
+            bool hasDirectory = !string.IsNullOrWhiteSpace(_currentDirectory) && Directory.Exists(_currentDirectory);
+            if (hasDirectory)
+            {
+                LoadImagesForDirectory(_currentDirectory);
+            }
+
+            MessageBox.Show("全キャッシュを削除しました。", "キャッシュ削除", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         private async void btnRename_Click(object sender, EventArgs e)
         {
-            L.ClearLog();
             L.WriteLine("=== btnRename_Click 開始 ===");
 
             var targets = flowThumbs.Controls.OfType<ThumbnailCard>()
@@ -1867,6 +1974,14 @@ namespace PhotoLabel
                     L.WriteLine($"--- 処理開始: {Path.GetFileName(src)} ---");
                     L.WriteLine($"  src: {src}");
                     L.WriteLine($"  _itemSnapshots.ContainsKey: {_itemSnapshots.ContainsKey(src)}");
+
+                    // 既存スナップショットがあっても、OCR未完了のUI値で作られた古いものの可能性があるため
+                    // 常にOCRを実行してスナップショットを最新化する
+                    if (_pictureToText != null)
+                    {
+                        await RunOcrForBatchAsync(src);
+                        L.WriteLine($"  RunOcrForBatchAsync後 ContainsKey={_itemSnapshots.ContainsKey(src)}");
+                    }
 
                     if (!_itemSnapshots.ContainsKey(src))
                     {
@@ -2060,7 +2175,13 @@ namespace PhotoLabel
             extension ??= string.Empty;
             result = result.Replace("{Ext}", extension);
             result = result.Replace(".*", extension);
-            return result.Trim();
+
+            // 拡張子を除いた幹部分のアンダースコアを整理:
+            // 連続アンダースコア → 1つに、先頭・末尾のアンダースコアを除去
+            var stem = Path.GetFileNameWithoutExtension(result.Trim());
+            var ext  = Path.GetExtension(result.Trim());
+            stem = System.Text.RegularExpressions.Regex.Replace(stem, "_+", "_").Trim('_');
+            return stem + ext;
         }
 
         private static string SanitizeFileName(string name)
@@ -2437,8 +2558,17 @@ namespace PhotoLabel
             // 移動処理
             var moveResult = await ExecuteFileMoves(validationResult.Targets, validationResult.MovePattern, validationResult.TargetRoot);
 
-            // 移動終了後の処理
-            RefreshAfterMove();
+            // 移動終了後の処理：移動先ディレクトリへ自動ナビゲート
+            bool hasDestDir = moveResult.DestDirs.Count > 0;
+            if (hasDestDir)
+            {
+                NavigateToDirectory(moveResult.DestDirs[0]);
+            }
+            else
+            {
+                RefreshAfterMove();
+            }
+
             ShowMoveResult(moveResult.MovedCount, moveResult.Errors);
         }
 
@@ -2479,17 +2609,23 @@ namespace PhotoLabel
             return (true, targets, movePattern, targetRoot);
         }
 
-        private async Task<(int MovedCount, List<string> Errors)> ExecuteFileMoves(List<ThumbnailCard> targets, string movePattern, string targetRoot)
+        private async Task<(int MovedCount, List<string> Errors, List<string> DestDirs)> ExecuteFileMoves(List<ThumbnailCard> targets, string movePattern, string targetRoot)
         {
             var today = DateTime.Now.ToString("yyyyMMdd");
             var moved = 0;
             var errors = new List<string>();
+            var destDirs = new List<string>();
 
             foreach (var card in targets)
             {
                 try
                 {
                     var src = card.FilePath;
+                    if (_pictureToText != null)
+                    {
+                        await RunOcrForBatchAsync(src);
+                    }
+
                     if (!_itemSnapshots.ContainsKey(src))
                     {
                         var ok = await EnsureSnapshotAsync(src);
@@ -2534,6 +2670,10 @@ namespace PhotoLabel
                     File.Move(src, destPath);
                     card.UpdateFilePath(destPath);
                     MoveSnapshot(src, destPath);
+                    if (!destDirs.Contains(destDir, StringComparer.OrdinalIgnoreCase))
+                    {
+                        destDirs.Add(destDir);
+                    }
 
                     var isCurrentPreview = _currentPreviewPath == src;
                     if (isCurrentPreview)
@@ -2556,7 +2696,42 @@ namespace PhotoLabel
                 }
             }
 
-            return (moved, errors);
+            return (moved, errors, destDirs);
+        }
+
+        private void NavigateToDirectory(string directoryPath)
+        {
+            bool exists = Directory.Exists(directoryPath);
+            if (!exists)
+            {
+                RefreshAfterMove();
+                return;
+            }
+
+            try
+            {
+                _suppressBulkOcr = true;
+                ClearAllSelections();
+
+                // ツリーを再構築して移動先ノードを選択
+                bool hasRoot = !string.IsNullOrWhiteSpace(_treeRootPath) && Directory.Exists(_treeRootPath);
+                if (hasRoot)
+                {
+                    PopulateTree(_treeRootPath);
+                    RestoreSelectedNode(directoryPath);
+                }
+
+                // ツリー選択でLoadImagesForDirectoryが呼ばれない場合のフォールバック
+                bool alreadyLoaded = string.Equals(_currentDirectory, directoryPath, StringComparison.OrdinalIgnoreCase);
+                if (!alreadyLoaded)
+                {
+                    LoadImagesForDirectory(directoryPath);
+                }
+            }
+            finally
+            {
+                _suppressBulkOcr = false;
+            }
         }
 
         private void RefreshAfterMove()

@@ -38,7 +38,18 @@ namespace PhotoLabel.Ocr
 
         public async Task<List<OcrResult>> ExtractTextAsync(string imagePath)
         {
-            var base64 = await ConvertImageToBase64Async(imagePath);
+            var base64 = await ConvertFileToBase64Async(imagePath);
+            return await PostAndParseAsync(base64);
+        }
+
+        public async Task<List<OcrResult>> ExtractTextFromImageAsync(Image image)
+        {
+            var base64 = ConvertImageToBase64(image);
+            return await PostAndParseAsync(base64);
+        }
+
+        private async Task<List<OcrResult>> PostAndParseAsync(string base64)
+        {
             var body = CreateRequest(base64);
             var response = await _httpClient.PostAsync(_visionApiUrl, new StringContent(body, Encoding.UTF8, "application/json"));
             response.EnsureSuccessStatusCode();
@@ -46,7 +57,7 @@ namespace PhotoLabel.Ocr
             return ParseResponse(json);
         }
 
-        private async Task<string> ConvertImageToBase64Async(string imagePath)
+        private async Task<string> ConvertFileToBase64Async(string imagePath)
         {
             await using var ms = new MemoryStream();
             using (var img = Image.FromFile(imagePath))
@@ -54,6 +65,14 @@ namespace PhotoLabel.Ocr
                 var copy = ResizeForVision(img, 4096, 640);
                 copy.Save(ms, ImageFormat.Jpeg);
             }
+            return Convert.ToBase64String(ms.ToArray());
+        }
+
+        private static string ConvertImageToBase64(Image image)
+        {
+            using var ms = new MemoryStream();
+            var copy = ResizeForVision(image, 4096, 640);
+            copy.Save(ms, ImageFormat.Jpeg);
             return Convert.ToBase64String(ms.ToArray());
         }
 

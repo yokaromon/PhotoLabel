@@ -125,6 +125,23 @@ namespace PhotoLabel.Ocr
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
+        public void ClearAll()
+        {
+            lock (_lock)
+            {
+                _memoryCache.Clear();
+            }
+
+            try
+            {
+                foreach (var file in Directory.GetFiles(_cacheDirectory, "*.json"))
+                {
+                    try { File.Delete(file); } catch { }
+                }
+            }
+            catch { }
+        }
+
         private void CleanupExpired()
         {
             var cutoff = DateTime.UtcNow - _maxAge;

@@ -2,10 +2,11 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "PhotoLabel"
-#define MyAppVersion "0.91"
+#define MyAppVersion "260326"
 #define MyAppPublisher "ykr.ltd"
 #define MyAppURL "https://www.ykr.ltd"
 #define MyAppExeName "PhotoLabel.exe"
+#define PublishDir "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Release\net8.0-windows\win-x64\publish"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -35,16 +36,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; 既存のConfig.iniがある場合は上書きしない
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Config.ini"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Microsoft.Web.WebView2.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Microsoft.Web.WebView2.WinForms.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\Microsoft.Web.WebView2.Wpf.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\PhotoLabel.deps.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\PhotoLabel.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\PhotoLabel.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Y:\Projects\job\int\aoyagi\source\PhotoLabel\bin\Debug\net8.0-windows\PhotoLabel.runtimeconfig.json"; DestDir: "{app}"; Flags: ignoreversion
+; self-contained publishの全ファイル�E�ENET Runtimeを同梱するため、インスト�Eル先に.NET不要E��E
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "Config.ini"
+; 既存�EConfig.iniがある場合�E上書きしなぁE
+Source: "{#PublishDir}\Config.ini"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

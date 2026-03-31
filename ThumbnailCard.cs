@@ -70,6 +70,7 @@ namespace PhotoLabel
             // AttachChildMouseForwarders(lblDate);
             // AttachChildMouseForwarders(lblSize);
 
+            AttachContextMenu();
             LoadMetadata(filePath);
         }
 
@@ -94,8 +95,14 @@ namespace PhotoLabel
                 var thumbPath = GetOrCreateThumbnail(filePath);
                 if (File.Exists(thumbPath))
                 {
+                    // MemoryStreamに全データをコピーしてからImageを生成する。
+                    // Image.FromStreamはストリームを生存期間中開いたままにする必要があるため、
+                    // FileStreamを直接渡すと閉じた後にデコードが壊れる可能性がある。
                     using var fs = new FileStream(thumbPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    picBox.Image = Image.FromStream(fs);
+                    var ms = new MemoryStream();
+                    fs.CopyTo(ms);
+                    ms.Position = 0;
+                    picBox.Image = Image.FromStream(ms);
                 }
             }
             catch
@@ -118,18 +125,49 @@ namespace PhotoLabel
             }
         }
 
+        public static void CleanupCacheIfNeeded(int intervalDays = 3)
+        {
+            var cacheDir = Path.Combine(Path.GetTempPath(), "PhotoLabel", "Thumbnails");
+            var markerPath = Path.Combine(cacheDir, "last_cleanup");
+
+            bool markerExists = File.Exists(markerPath);
+            bool isDue = !markerExists
+                || (DateTime.UtcNow - File.GetLastWriteTimeUtc(markerPath)).TotalDays >= intervalDays;
+
+            if (!isDue)
+            {
+                return;
+            }
+
+            try
+            {
+                if (Directory.Exists(cacheDir))
+                {
+                    Directory.Delete(cacheDir, recursive: true);
+                }
+
+                Directory.CreateDirectory(cacheDir);
+                File.WriteAllText(markerPath, string.Empty);
+            }
+            catch
+            {
+                // キャッシュ削除失敗は無視（次回起動時に再試行される）
+            }
+        }
+
         private static string GetOrCreateThumbnail(string filePath, int width = 200, int height = 150)
         {
             var cacheDir = Path.Combine(Path.GetTempPath(), "PhotoLabel", "Thumbnails");
             Directory.CreateDirectory(cacheDir);
 
-            var thumbName = $"thumb_{ComputePathHash(filePath)}_{width}x{height}.jpg";
+            // パス・更新日時・サイズをハッシュに含めることで、
+            // リネームや内容変更があれば必ず別のキャッシュファイルが作られ、不一致が起きない
+            var fi = new FileInfo(filePath);
+            var cacheKey = $"{filePath}|{fi.LastWriteTimeUtc.Ticks}|{fi.Length}";
+            var thumbName = $"thumb_{ComputePathHash(cacheKey)}_{width}x{height}.jpg";
             var thumbPath = Path.Combine(cacheDir, thumbName);
 
-            var sourceTime = File.GetLastWriteTimeUtc(filePath);
-            var needRegen = !File.Exists(thumbPath) || File.GetLastWriteTimeUtc(thumbPath) < sourceTime;
-
-            if (needRegen)
+            if (!File.Exists(thumbPath))
             {
                 GenerateThumbnail(filePath, thumbPath, width, height);
             }
@@ -244,6 +282,21 @@ namespace PhotoLabel
             g.DrawImage(img, 0, 0, w, h);
 
             bmp.Save(thumbPath, System.Drawing.Imaging.ImageFormat.Jpeg);
+        }
+
+        private void AttachContextMenu()
+        {
+            var menu = new ContextMenuStrip();
+            var copyItem = new ToolStripMenuItem("フルパスをコピー");
+            copyItem.Click += (_, _) => Clipboard.SetText(FilePath);
+            menu.Items.Add(copyItem);
+
+            // カード本体と各子コントロールにコンテキストメニューを設定する
+            ContextMenuStrip = menu;
+            picBox.ContextMenuStrip = menu;
+            lblName.ContextMenuStrip = menu;
+            lblDate.ContextMenuStrip = menu;
+            lblSize.ContextMenuStrip = menu;
         }
 
         private void BubbleClick(object? sender, EventArgs e)
