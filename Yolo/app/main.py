@@ -29,9 +29,6 @@ app.mount("/photolabel/static", StaticFiles(directory=str(APP_DIR / "static")), 
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 
-class LoadImagesRequest(BaseModel):
-    folder_path: str | None = None
-
 
 class ClassesRequest(BaseModel):
     classes: list[str]
@@ -81,16 +78,21 @@ async def save_classes(payload: ClassesRequest) -> JSONResponse:
 
 
 @app.post("/photolabel/api/load-images")
-async def load_images(payload: LoadImagesRequest) -> JSONResponse:
+async def load_images(files: list[UploadFile] = File(...)) -> JSONResponse:
     try:
-        images = file_service.load_images(payload.folder_path)
+        files_data = [
+            (f.filename or f.filename, await f.read())
+            for f in files
+            if f.filename and Path(f.filename).suffix.lower() in {".jpg", ".jpeg", ".png"}
+        ]
+        images = file_service.save_uploaded_images(files_data)
         return JSONResponse({
             "folder": str(file_service.get_loaded_folder()),
             "count": len(images),
             "images": [path.name for path in images],
             "classes": class_service.get_classes(),
         })
-    except (FileNotFoundError, ValueError) as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

@@ -273,11 +273,20 @@ async function loadImageAt(index) {
 }
 
 async function loadImages() {
-  const folderPath = document.getElementById("folderPath").value.trim();
+  const input = document.getElementById("folderInput");
+  const imageFiles = Array.from(input.files).filter(f =>
+    /\.(jpe?g|png)$/i.test(f.name)
+  );
+  if (imageFiles.length === 0) {
+    throw new Error("画像ファイルが選択されていません。");
+  }
+  const formData = new FormData();
+  for (const f of imageFiles) {
+    formData.append("files", f);
+  }
   const data = await fetchJson("/photolabel/api/load-images", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder_path: folderPath || null }),
+    body: formData,
   });
   applyClasses(data.classes || state.classes);
   state.images = data.images.map((name, index) => ({ name, index }));

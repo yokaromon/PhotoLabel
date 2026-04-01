@@ -11,8 +11,8 @@
     <section class="panel">
       <h1>License Plate YOLO Trainer</h1>
       <div class="row">
-        <input id="folderPath" type="text" placeholder="画像フォルダ。空なら workspace/source_images">
-        <button id="loadImagesBtn">読み込み</button>
+        <input id="folderInput" type="file" accept="image/jpeg,image/png" webkitdirectory multiple>
+        <button id="loadImagesBtn">アップロード</button>
       </div>
       <p id="imageStatus">画像を読み込んでください。</p>
       <p id="imageName">-</p>

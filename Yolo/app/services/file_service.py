@@ -29,21 +29,24 @@ class FileService:
         ]:
             path.mkdir(parents=True, exist_ok=True)
 
-    def load_images(self, folder: str | None) -> list[Path]:
-        selected = Path(folder).expanduser() if folder else self.source_images_dir
-        if not selected.exists() or not selected.is_dir():
-            raise FileNotFoundError(f"Image folder not found: {selected}")
+    def save_uploaded_images(self, files_data: list[tuple[str, bytes]]) -> list[Path]:
+        """アップロードされた画像を source_images_dir に保存して登録する。"""
+        saved: list[Path] = []
+        for filename, data in files_data:
+            # webkitdirectory はパス区切りを含む場合があるのでベース名のみ使用
+            name = Path(filename).name
+            dest = self.source_images_dir / name
+            dest.write_bytes(data)
+            saved.append(dest)
 
-        images = sorted(
-            path for path in selected.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
-        )
-        if not images:
-            raise ValueError("No image files were found in the selected folder.")
+        saved.sort(key=lambda p: p.name)
+        if not saved:
+            raise ValueError("No image files were uploaded.")
 
         with self._lock:
-            self._folder = selected
-            self._images = images
-        return images
+            self._folder = self.source_images_dir
+            self._images = saved
+        return saved
 
     def get_loaded_images(self) -> list[Path]:
         with self._lock:
