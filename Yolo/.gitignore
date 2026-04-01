@@ -14,5 +14,8 @@ __pycache__/
 # YOLO training outputs
 workspace/runs/
 
+# Dataset (環境依存パスが含まれるため追跡しない)
+workspace/dataset/
+
 # Dataset label cache
 workspace/dataset/labels/*.cache

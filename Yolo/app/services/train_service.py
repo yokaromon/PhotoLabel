@@ -4,6 +4,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+import yaml
 from ultralytics import YOLO
 
 
@@ -51,8 +52,19 @@ class TrainService:
         self._thread.start()
         return self.get_status()
 
+    @staticmethod
+    def _fix_data_yaml_path(data_yaml: Path) -> None:
+        """data.yaml の path フィールドを現在の環境の絶対パスに書き換える。
+        Mac 等の別環境で生成されたファイルが残っている場合の対策。"""
+        correct_path = str(data_yaml.parent.resolve())
+        data = yaml.safe_load(data_yaml.read_text(encoding="utf-8"))
+        if data.get("path") != correct_path:
+            data["path"] = correct_path
+            data_yaml.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
     def _run_training(self, data_yaml: Path, model: str, epochs: int, imgsz: int, batch: int) -> None:
         try:
+            self._fix_data_yaml_path(data_yaml)
             yolo = YOLO(model)
             self._append_log(f"Loaded model: {model}")
             results = yolo.train(
