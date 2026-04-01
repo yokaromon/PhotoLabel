@@ -216,3 +216,16 @@ async def crop_board(
 @app.get("/photolabel/api/health")
 async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+if __name__ == "__main__":
+    import configparser
+    import uvicorn
+
+    _config = configparser.ConfigParser()
+    _config.read(Path(__file__).resolve().parent.parent / "config.ini")
+
+    _host = _config.get("server", "host", fallback="127.0.0.1")
+    _port = _config.getint("server", "port", fallback=8000)
+
+    uvicorn.run("app.main:app", host=_host, port=_port, reload=True)

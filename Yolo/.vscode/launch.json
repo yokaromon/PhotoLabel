@@ -5,15 +5,8 @@
       "name": "FastAPI: Uvicorn (Poetry)",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "app.main:app",
-        "--reload",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "8000"
-      ],
+      "module": "app.main",
+      "args": [],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
@@ -23,7 +16,7 @@
       },
       "serverReadyAction": {
         "action": "openExternally",
-        "pattern": "Uvicorn running on (https?://127\\.0\\.0\\.1:8000)",
+        "pattern": "Uvicorn running on (https?://127\\.0\\.0\\.1:8037)",
         "uriFormat": "%s/photolabel"
       }
     },
@@ -31,7 +24,7 @@
       "name": "Frontend: Chrome",
       "type": "pwa-chrome",
       "request": "launch",
-      "url": "http://127.0.0.1:8000/photolabel",
+      "url": "http://127.0.0.1:8037/photolabel",
       "webRoot": "${workspaceFolder}"
     }
   ]
