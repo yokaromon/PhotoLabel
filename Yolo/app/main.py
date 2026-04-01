@@ -92,7 +92,7 @@ async def load_images(files: list[UploadFile] = File(...)) -> JSONResponse:
             "images": [path.name for path in images],
             "classes": class_service.get_classes(),
         })
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

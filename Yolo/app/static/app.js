@@ -269,6 +269,9 @@ async function loadImageAt(index) {
     await loadAnnotations(imageInfo.name);
     drawCanvas();
   };
+  image.onerror = () => {
+    document.getElementById("imageStatus").textContent = `画像の読み込みに失敗しました (index: ${index})`;
+  };
   image.src = `/photolabel/api/image/${index}`;
 }
 
@@ -278,8 +281,10 @@ async function loadImages() {
     /\.(jpe?g|png)$/i.test(f.name)
   );
   if (imageFiles.length === 0) {
-    throw new Error("画像ファイルが選択されていません。");
+    throw new Error("JPG / PNG ファイルが選択されていません。");
   }
+  const statusEl = document.getElementById("imageStatus");
+  statusEl.textContent = `アップロード中… (${imageFiles.length} ファイル)`;
   const formData = new FormData();
   for (const f of imageFiles) {
     formData.append("files", f);
